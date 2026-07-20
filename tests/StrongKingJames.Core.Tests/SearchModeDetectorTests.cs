@@ -14,6 +14,8 @@ public class SearchModeDetectorTests
     [InlineData("1 John 4", SearchMode.Reference)]
     [InlineData("Gen 1:1", SearchMode.Reference)]
     [InlineData("Genesis 1", SearchMode.Reference)]
+    [InlineData("Song of Solomon 2:1", SearchMode.Reference)]
+    [InlineData("Song of Songs 1", SearchMode.Reference)]
     [InlineData("what does the bible say about love", SearchMode.Semantic)]
     [InlineData("forgiveness", SearchMode.Semantic)]
     public void Detect_classifies_query(string query, SearchMode expected)
