@@ -41,5 +41,6 @@ public class SearchServiceTests(DatabaseFixture fx)
 
         Assert.Equal(2, results.Count);
         Assert.Equal("Gen.1.1", results[0].OsisId);
+        Assert.True(results[0].Score > 0.99);
     }
 }
