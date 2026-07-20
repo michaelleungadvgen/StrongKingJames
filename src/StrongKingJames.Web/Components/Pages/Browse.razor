@@ -6,7 +6,7 @@
 
 <PageTitle>Browse - StrongKingJames</PageTitle>
 
-<h1>Browse</h1>
+<h1>Browse the Bible</h1>
 
 <OllamaStatusBanner />
 
@@ -24,8 +24,10 @@
         Chapter
         <input type="number" min="1" value="@_chapter" @onchange="OnChapterChanged" style="width: 5rem;" />
     </label>
-    <button type="button" @onclick="PrevChapter" disabled="@(_chapter <= 1)">Prev</button>
-    <button type="button" @onclick="NextChapter">Next</button>
+    <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+        <button type="button" @onclick="PrevChapter" disabled="@(_chapter <= 1)">← Prev</button>
+        <button type="button" @onclick="NextChapter">Next →</button>
+    </div>
 </div>
 
 @if (_bookError is not null)
@@ -34,7 +36,7 @@
 }
 else if (_loading)
 {
-    <p class="muted">Loading...</p>
+    <p class="muted"><span class="loading-spinner"></span> Loading chapter...</p>
 }
 else if (_verses.Count == 0)
 {
@@ -42,13 +44,17 @@ else if (_verses.Count == 0)
 }
 else
 {
-    <div class="chapter-text">
-        <h2>@_selectedName @_chapter</h2>
-        @foreach (var v in _verses)
-        {
-            <VerseView Verse="v" OnWordClicked="ShowStrongs" />
-        }
-    </div>
+    <article class="chapter-card">
+        <header class="chapter-header">
+            <h2>@_selectedName @_chapter</h2>
+        </header>
+        <div class="chapter-text">
+            @foreach (var v in _verses)
+            {
+                <VerseView Verse="v" OnWordClicked="ShowStrongs" />
+            }
+        </div>
+    </article>
 }
 
 @if (_selectedStrongs is not null)

@@ -7,7 +7,7 @@
 
 <PageTitle>Search - StrongKingJames</PageTitle>
 
-<h1>Search</h1>
+<h1>Search Scripture</h1>
 
 @if (_showOllamaBanner)
 {
@@ -17,17 +17,17 @@
 <div class="search-box">
     <input @bind="_query" @bind:event="oninput" placeholder="Reference (John 3:16), Strong's (G26), or a phrase..."
            @onkeydown="OnKeyDown" disabled="@_busy" />
-    <button type="button" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
+    <button type="button" class="btn-primary" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
 </div>
 
 @if (_mode is not null)
 {
-    <p class="mode-indicator">Mode: @_mode</p>
+    <span class="mode-indicator">Mode: @_mode</span>
 }
 
 @if (_busy)
 {
-    <p class="muted">Searching...</p>
+    <p class="muted"><span class="loading-spinner"></span> Searching...</p>
 }
 
 @if (_message is not null)
@@ -44,9 +44,9 @@
                 <a href="@VerseLink(r.OsisId)">@r.Reference</a>
                 @if (r.Score is not null)
                 {
-                    <span class="score">(score @r.Score.Value.ToString("F3"))</span>
+                    <span class="score">score @r.Score.Value.ToString("F3")</span>
                 }
-                <span> — @r.Text</span>
+                <span class="result-text">@r.Text</span>
             </li>
         }
     </ul>

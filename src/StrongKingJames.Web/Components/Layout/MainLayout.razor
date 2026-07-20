@@ -2,11 +2,14 @@
 
 <header class="app-header">
     <div class="app-header-inner">
-        <span class="app-title">StrongKingJames</span>
+        <a href="/" class="app-brand">
+            <span class="app-brand-icon">📖</span>
+            <span>StrongKingJames</span>
+        </a>
         <nav class="app-nav">
-            <a href="/">Browse</a>
-            <a href="/search">Search</a>
-            <a href="/chat">Chat</a>
+            <NavLink href="/" Match="NavLinkMatch.All">Browse</NavLink>
+            <NavLink href="/search">Search</NavLink>
+            <NavLink href="/chat">Chat</NavLink>
         </nav>
     </div>
 </header>

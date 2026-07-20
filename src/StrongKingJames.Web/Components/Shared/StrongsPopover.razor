@@ -1,48 +1,52 @@
 @namespace StrongKingJames.Web.Components.Shared
 @inject IBibleRepository Repo
 
-<div class="strongs-popover">
-    <div class="strongs-popover-header">
-        <strong>Strong's</strong>
-        <button type="button" class="strongs-close" @onclick="OnClose">Close</button>
-    </div>
+@if (Numbers.Count > 0)
+{
+    <div class="strongs-panel-backdrop open" @onclick="OnClose"></div>
+    <aside class="strongs-panel open">
+        <div class="strongs-panel-header">
+            <strong>Strong's Concordance</strong>
+            <button type="button" class="strongs-close" @onclick="OnClose" aria-label="Close">×</button>
+        </div>
 
-    @if (_loading)
-    {
-        <p class="strongs-loading">Loading...</p>
-    }
-    else
-    {
-        @foreach (var number in Numbers)
+        @if (_loading)
         {
-            var entry = _entries.FirstOrDefault(e => e.Number == number);
-            <div class="strongs-entry">
-                @if (entry is null)
-                {
-                    <div class="strongs-number">@number</div>
-                    <p class="strongs-none">No entry found (has the Strong's dictionary been imported?)</p>
-                }
-                else
-                {
-                    <div class="strongs-number">@entry.Number</div>
-                    <dl class="strongs-fields">
-                        <dt>Lemma</dt>
-                        <dd>@entry.Lemma</dd>
-                        <dt>Transliteration</dt>
-                        <dd>@entry.Transliteration</dd>
-                        <dt>Pronunciation</dt>
-                        <dd>@entry.Pronunciation</dd>
-                        <dt>Definition</dt>
-                        <dd>@entry.Definition</dd>
-                        <dt>KJV Usage</dt>
-                        <dd>@entry.KjvUsage</dd>
-                    </dl>
-                }
-                <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
-            </div>
+            <p class="strongs-loading"><span class="loading-spinner"></span> Loading entries...</p>
         }
-    }
-</div>
+        else
+        {
+            @foreach (var number in Numbers)
+            {
+                var entry = _entries.FirstOrDefault(e => e.Number == number);
+                <div class="strongs-entry">
+                    @if (entry is null)
+                    {
+                        <div class="strongs-number">@number</div>
+                        <p class="strongs-none">No entry found (has the Strong's dictionary been imported?)</p>
+                    }
+                    else
+                    {
+                        <div class="strongs-number">@entry.Number</div>
+                        <dl class="strongs-fields">
+                            <dt>Lemma</dt>
+                            <dd>@entry.Lemma</dd>
+                            <dt>Transliteration</dt>
+                            <dd>@entry.Transliteration</dd>
+                            <dt>Pronunciation</dt>
+                            <dd>@entry.Pronunciation</dd>
+                            <dt>Definition</dt>
+                            <dd>@entry.Definition</dd>
+                            <dt>KJV Usage</dt>
+                            <dd>@entry.KjvUsage</dd>
+                        </dl>
+                    }
+                    <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
+                </div>
+            }
+        }
+    </aside>
+}
 
 @code {
     [Parameter] public IReadOnlyList<string> Numbers { get; set; } = [];

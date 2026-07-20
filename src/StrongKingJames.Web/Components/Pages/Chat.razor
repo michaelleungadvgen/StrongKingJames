@@ -5,52 +5,76 @@
 <PageTitle>Chat - StrongKingJames</PageTitle>
 
 <h1>Ask the Bible</h1>
+
 <OllamaStatusBanner />
 
-<div class="chat">
-    <textarea @bind="_question" @bind:event="oninput" rows="3" placeholder="Ask a question..." disabled="@_busy"></textarea>
-    <button type="button" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
-</div>
-
-@if (!string.IsNullOrEmpty(_answer))
-{
-    <div class="answer">@_answer</div>
-}
-@if (_citations.Count > 0)
-{
-    <div class="citations">
-        <strong>Citations:</strong>
-        <ul>
-            @foreach (var c in _citations)
+<div class="chat-card">
+    <div class="chat-history" id="chat-history">
+        @if (_messages.Count == 0)
+        {
+            <div class="muted" style="text-align: center; padding: 2rem 0;">
+                Ask a question and the answer will be grounded in Scripture with verse citations.
+            </div>
+        }
+        else
+        {
+            @foreach (var msg in _messages)
             {
-                <li><a href="@CitationLink(c)">@c</a></li>
+                <div class="chat-message @(msg.IsUser ? "user" : "assistant")">
+                    <span class="chat-sender">@(msg.IsUser ? "You" : "StrongKingJames")</span>
+                    <div class="chat-bubble">@msg.Text</div>
+                    @if (!msg.IsUser && msg.Citations.Count > 0)
+                    {
+                        <div class="citations">
+                            <strong>Scripture citations</strong>
+                            <ul>
+                                @foreach (var c in msg.Citations)
+                                {
+                                    <li><a href="@CitationLink(c)">@c</a></li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
             }
-        </ul>
+        }
     </div>
-}
+
+    <div class="chat-input-row">
+        <textarea @bind="_question" @bind:event="oninput" rows="3" placeholder="Ask a question..." disabled="@_busy"></textarea>
+        <button type="button" class="btn-primary" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
+    </div>
+</div>
 
 @code {
     private string _question = "";
-    private string _answer = "";
     private bool _busy;
-    private IReadOnlyList<string> _citations = [];
+    private List<ChatMessage> _messages = [];
 
     private async Task AskAsync()
     {
         if (string.IsNullOrWhiteSpace(_question)) return;
-        _busy = true; _answer = ""; _citations = [];
+
+        var question = _question.Trim();
+        _messages.Add(new ChatMessage { Text = question, IsUser = true });
+        _question = "";
+        _busy = true;
+
+        var answer = new ChatMessage { Text = "", IsUser = false };
+        _messages.Add(answer);
+
         try
         {
-            await foreach (var chunk in Rag.AnswerAsync(_question))
+            await foreach (var chunk in Rag.AnswerAsync(question))
             {
-                _answer += chunk;
+                answer.Text += chunk;
                 await InvokeAsync(StateHasChanged);
             }
-            _citations = CitationExtractor.Extract(_answer);
+            answer.Citations = CitationExtractor.Extract(answer.Text).ToList();
         }
         catch (Exception ex)
         {
-            _answer = $"Error: {ex.Message}. Is Ollama running with the models pulled?";
+            answer.Text = $"Error: {ex.Message}. Is Ollama running with the models pulled?";
         }
         finally
         {
@@ -67,5 +91,12 @@
         var chapterVerse = citation[(lastSpace + 1)..];
         var chapter = chapterVerse.Split(':')[0];
         return $"/browse/{Uri.EscapeDataString(book)}/{chapter}";
+    }
+
+    private sealed class ChatMessage
+    {
+        public string Text { get; set; } = "";
+        public bool IsUser { get; set; }
+        public List<string> Citations { get; set; } = [];
     }
 }
