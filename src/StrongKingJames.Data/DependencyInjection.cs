@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Pgvector.EntityFrameworkCore;
+using StrongKingJames.Core.Services;
+using StrongKingJames.Data.Repositories;
 
 namespace StrongKingJames.Data;
 
@@ -10,7 +12,8 @@ public static class DependencyInjection
     {
         services.AddDbContext<BibleDbContext>(opt =>
             opt.UseNpgsql(connectionString, o => o.UseVector()));
-        // Repository/search registrations are added in a later task once those classes exist.
+        services.AddScoped<IBibleRepository, BibleRepository>();
+        services.AddScoped<ISearchService, SearchService>();
         return services;
     }
 }
