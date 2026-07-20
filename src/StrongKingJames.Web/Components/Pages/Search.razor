@@ -1,0 +1,163 @@
+@page "/search"
+@rendermode InteractiveServer
+@inject IBibleRepository Repo
+@inject ISearchService SearchService
+@inject IEmbeddingService Embedder
+@inject NavigationManager Nav
+
+<PageTitle>Search - StrongKingJames</PageTitle>
+
+<h1>Search</h1>
+
+@if (_showOllamaBanner)
+{
+    <OllamaStatusBanner />
+}
+
+<div class="search-box">
+    <input @bind="_query" @bind:event="oninput" placeholder="Reference (John 3:16), Strong's (G26), or a phrase..."
+           @onkeydown="OnKeyDown" disabled="@_busy" />
+    <button type="button" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
+</div>
+
+@if (_mode is not null)
+{
+    <p class="mode-indicator">Mode: @_mode</p>
+}
+
+@if (_busy)
+{
+    <p class="muted">Searching...</p>
+}
+
+@if (_message is not null)
+{
+    <p class="muted">@_message</p>
+}
+
+@if (_results.Count > 0)
+{
+    <ul class="result-list">
+        @foreach (var r in _results)
+        {
+            <li>
+                <a href="@VerseLink(r.OsisId)">@r.Reference</a>
+                @if (r.Score is not null)
+                {
+                    <span class="score">(score @r.Score.Value.ToString("F3"))</span>
+                }
+                <span> — @r.Text</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [SupplyParameterFromQuery] public string? Q { get; set; }
+
+    private string _query = "";
+    private SearchMode? _mode;
+    private IReadOnlyList<SearchResult> _results = [];
+    private string? _message;
+    private bool _busy;
+    private bool _showOllamaBanner;
+    private bool _autoRan;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_autoRan && !string.IsNullOrWhiteSpace(Q))
+        {
+            _autoRan = true;
+            _query = Q;
+            await DoSearchAsync();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_busy && !string.IsNullOrWhiteSpace(_query))
+        {
+            await DoSearchAsync();
+        }
+    }
+
+    private async Task DoSearchAsync()
+    {
+        var query = _query.Trim();
+        if (query.Length == 0) return;
+
+        _busy = true;
+        _message = null;
+        _results = [];
+        _showOllamaBanner = false;
+        _mode = SearchModeDetector.Detect(query);
+
+        try
+        {
+            switch (_mode)
+            {
+                case SearchMode.Reference:
+                    await HandleReferenceAsync(query);
+                    break;
+
+                case SearchMode.Strongs:
+                    _results = await Repo.GetVersesByStrongsAsync(query.ToUpperInvariant());
+                    if (_results.Count == 0) _message = "No verses found for that Strong's number.";
+                    break;
+
+                default: // Semantic (and Auto fallthrough)
+                    try
+                    {
+                        var embedding = await Embedder.EmbedAsync(query);
+                        _results = await SearchService.SemanticSearchAsync(embedding, 20);
+                        if (_results.Count == 0) _message = "No matching verses (are embeddings imported?).";
+                    }
+                    catch (Exception ex)
+                    {
+                        _showOllamaBanner = true;
+                        _message = $"Semantic search needs Ollama running. ({ex.Message})";
+                    }
+                    break;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleReferenceAsync(string query)
+    {
+        // Split "Book c[:v]" into a book part and a trailing chapter[:verse].
+        var m = System.Text.RegularExpressions.Regex.Match(
+            query, @"^(?<book>.+?)\s+(?<chapter>\d+)(?::\d+)?$");
+        if (!m.Success)
+        {
+            _message = "Couldn't parse reference.";
+            return;
+        }
+
+        var bookPart = m.Groups["book"].Value.Trim();
+        var chapter = int.Parse(m.Groups["chapter"].Value);
+
+        var books = await Repo.GetBooksAsync();
+        var book = books.FirstOrDefault(b =>
+            b.Name.Equals(bookPart, StringComparison.OrdinalIgnoreCase) ||
+            b.Abbreviation.Equals(bookPart, StringComparison.OrdinalIgnoreCase));
+
+        if (book is null)
+        {
+            _message = "Couldn't parse reference.";
+            return;
+        }
+
+        Nav.NavigateTo($"/browse/{book.Abbreviation}/{chapter}");
+    }
+
+    private static string VerseLink(string osisId)
+    {
+        var parts = osisId.Split('.');
+        if (parts.Length >= 2) return $"/browse/{parts[0]}/{parts[1]}";
+        return "/search?q=" + Uri.EscapeDataString(osisId);
+    }
+}

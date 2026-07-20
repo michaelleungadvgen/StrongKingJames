@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # global.json pins SDK 10.0.302 with rollForward=latestFeature,
+          # so any installed 10.0.302+ feature band satisfies it.
+          dotnet-version: '10.0.x'
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release
+
+      # Unit tests. Data.Tests is intentionally excluded here: it is an integration
+      # suite that spins up PostgreSQL via Testcontainers and needs Docker — run it
+      # locally (`dotnet test tests/StrongKingJames.Data.Tests`), not in CI.
+      - name: Test Core
+        run: dotnet test tests/StrongKingJames.Core.Tests --configuration Release --no-build
+
+      - name: Test Importer
+        run: dotnet test tests/StrongKingJames.Importer.Tests --configuration Release --no-build

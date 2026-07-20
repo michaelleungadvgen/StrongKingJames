@@ -1,0 +1,66 @@
+# StrongKingJames — everything in Docker except Ollama.
+#
+# Ollama runs on the HOST (not in Docker). Containers reach it via host.docker.internal:11434.
+# On Linux, the extra_hosts entry maps host.docker.internal to the host gateway.
+#
+# Before `docker compose up --build`:
+#   1. Start Ollama on the host with OLLAMA_HOST=0.0.0.0 and pull the models
+#      (nomic-embed-text, llama3.1:8b) — see README.
+#   2. Download the three kjs data files into ./data (kjv_pure.json, strong_pure.json,
+#      strong_dict.json) — see README "Initialize the project". These carry Strong's numbers for
+#      both the Old and New Testament.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: strongkingjames
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d strongkingjames"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Runs to completion: applies migrations, seeds the DB, backfills embeddings via
+  # the host's Ollama, then exits. The web service waits for it to finish.
+  importer:
+    build:
+      context: .
+      dockerfile: src/StrongKingJames.Importer/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__bible: "Host=db;Port=5432;Database=strongkingjames;Username=postgres;Password=postgres"
+      Ollama__BaseUrl: "http://host.docker.internal:11434"
+    volumes:
+      - ./data:/data:ro
+    command: ["--format", "kjs", "--kjs-bible", "/data/kjv_pure.json", "--kjs-strongs", "/data/strong_pure.json", "--kjs-dict", "/data/strong_dict.json"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      dockerfile: src/StrongKingJames.Web/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      importer:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__bible: "Host=db;Port=5432;Database=strongkingjames;Username=postgres;Password=postgres"
+      Ollama__BaseUrl: "http://host.docker.internal:11434"
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

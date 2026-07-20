@@ -1,0 +1,71 @@
+@page "/chat"
+@rendermode InteractiveServer
+@inject IRagService Rag
+
+<PageTitle>Chat - StrongKingJames</PageTitle>
+
+<h1>Ask the Bible</h1>
+<OllamaStatusBanner />
+
+<div class="chat">
+    <textarea @bind="_question" @bind:event="oninput" rows="3" placeholder="Ask a question..." disabled="@_busy"></textarea>
+    <button type="button" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_answer))
+{
+    <div class="answer">@_answer</div>
+}
+@if (_citations.Count > 0)
+{
+    <div class="citations">
+        <strong>Citations:</strong>
+        <ul>
+            @foreach (var c in _citations)
+            {
+                <li><a href="@CitationLink(c)">@c</a></li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    private string _question = "";
+    private string _answer = "";
+    private bool _busy;
+    private IReadOnlyList<string> _citations = [];
+
+    private async Task AskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_question)) return;
+        _busy = true; _answer = ""; _citations = [];
+        try
+        {
+            await foreach (var chunk in Rag.AnswerAsync(_question))
+            {
+                _answer += chunk;
+                await InvokeAsync(StateHasChanged);
+            }
+            _citations = CitationExtractor.Extract(_answer);
+        }
+        catch (Exception ex)
+        {
+            _answer = $"Error: {ex.Message}. Is Ollama running with the models pulled?";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Turn "John 3:16" into "/browse/John/3" (best-effort; book name may differ from abbrev).
+    private static string CitationLink(string citation)
+    {
+        var lastSpace = citation.LastIndexOf(' ');
+        if (lastSpace < 0) return "/search?q=" + Uri.EscapeDataString(citation);
+        var book = citation[..lastSpace].Trim();
+        var chapterVerse = citation[(lastSpace + 1)..];
+        var chapter = chapterVerse.Split(':')[0];
+        return $"/browse/{Uri.EscapeDataString(book)}/{chapter}";
+    }
+}

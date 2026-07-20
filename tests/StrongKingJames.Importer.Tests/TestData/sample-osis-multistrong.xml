@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText osisIDWork="KJV">
+    <div type="book" osisID="Gen">
+      <chapter osisID="Gen.2">
+        <verse osisID="Gen.2.1" sID="Gen.2.1"/>
+        <w lemma="strong:H1234 strong:H5678">grace</w> <w lemma="strong:H0430 lemma.TH:0247">God</w>
+        <verse eID="Gen.2.1"/>
+      </chapter>
+    </div>
+  </osisText>
+</osis>

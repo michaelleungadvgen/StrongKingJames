@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+
+  <ItemGroup>
+    <ProjectReference Include="..\StrongKingJames.Web\StrongKingJames.Web.csproj" />
+    <ProjectReference Include="..\StrongKingJames.Importer\StrongKingJames.Importer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>5bf9b729-72f9-46a9-b326-76e2bde0d254</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

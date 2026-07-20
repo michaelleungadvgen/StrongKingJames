@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText>
+    <div type="entry" n="H0430" osisID="strong:H0430">
+      <w ID="H0430" lemma="אֱלֹהִים" xlit="ʼĕlôhîym" POS="n-m" xml:lang="heb">אֱלֹהִים</w>
+      <list><item><label>Definition</label>
+        <p>gods in the ordinary sense; specifically the supreme God</p></item>
+        <item><label>KJV Usage</label><p>God, gods, judges</p></item>
+      </list>
+    </div>
+  </osisText>
+</osis>
