@@ -2,12 +2,29 @@
 @rendermode InteractiveServer
 @inject IRagService Rag
 @inject IJSRuntime JS
+@inject StrongKingJames.Web.Ollama.OllamaHealth Health
+@inject StrongKingJames.Core.Ollama.OllamaOptions OllamaOpts
 
 <PageTitle>Chat - StrongKingJames</PageTitle>
 
 <h1>Ask the Bible</h1>
 
 <OllamaStatusBanner />
+
+<div class="chat-toolbar">
+    <label for="model-select">Model:</label>
+    <select id="model-select" @bind="_selectedModel" disabled="@(_busy || _models.Count == 0)">
+        @if (_models.Count == 0)
+        {
+            <option value="">(loading models…)</option>
+        }
+        @foreach (var m in _models)
+        {
+            <option value="@m">@m</option>
+        }
+    </select>
+    <button type="button" class="chat-clear" @onclick="ClearChat" disabled="@(_busy || _messages.Count == 0)">New chat</button>
+</div>
 
 <div class="chat-card">
     <div class="chat-history" id="chat-history">
@@ -84,10 +101,16 @@
 </div>
 
 @code {
+    // Approximate character budget for prior turns sent as context. Older turns beyond this
+    // are dropped from what we send (but still shown in the transcript).
+    private const int HistoryContextBudgetChars = 8000;
+
     private string _question = "";
     private bool _busy;
     private bool _isStreaming;
     private List<ChatMessage> _messages = [];
+    private List<string> _models = [];
+    private string _selectedModel = "";
 
     private readonly string[] _suggestions =
     [
@@ -97,10 +120,30 @@
         "What is faith?"
     ];
 
+    protected override async Task OnInitializedAsync()
+    {
+        _models = (await Health.ListModelsAsync()).ToList();
+        if (_models.Count > 0)
+        {
+            // Prefer the configured chat model (e.g. llama3.1:8b) over the alphabetical first.
+            _selectedModel = _models.FirstOrDefault(m =>
+                m.Equals(OllamaOpts.ChatModel, StringComparison.OrdinalIgnoreCase)
+                || m.StartsWith(OllamaOpts.ChatModel, StringComparison.OrdinalIgnoreCase))
+                ?? _models[0];
+        }
+    }
+
     private async Task AskAsync(string? suggestedQuestion = null)
     {
         var question = (suggestedQuestion ?? _question).Trim();
-        if (string.IsNullOrWhiteSpace(question)) return;
+        if (_busy || string.IsNullOrWhiteSpace(question)) return;
+
+        // Prior completed turns (before this question), converted and trimmed to the context budget.
+        var priorTurns = _messages
+            .Where(m => !string.IsNullOrEmpty(m.Text))
+            .Select(m => new StrongKingJames.Core.Models.ChatMessage(m.IsUser ? "user" : "assistant", m.Text))
+            .ToList();
+        var priorContext = TrimToBudget(priorTurns, HistoryContextBudgetChars);
 
         _messages.Add(new ChatMessage { Text = question, IsUser = true });
         _question = "";
@@ -111,9 +154,10 @@
         var answer = new ChatMessage { Text = "", IsUser = false };
         _messages.Add(answer);
 
+        var model = string.IsNullOrWhiteSpace(_selectedModel) ? null : _selectedModel;
         try
         {
-            await foreach (var chunk in Rag.AnswerAsync(question))
+            await foreach (var chunk in Rag.AnswerAsync(question, model, priorContext))
             {
                 answer.Text += chunk;
                 await InvokeAsync(StateHasChanged);
@@ -123,7 +167,7 @@
         }
         catch (Exception ex)
         {
-            answer.Text = $"Error: {ex.Message}. Is Ollama running with the models pulled?";
+            answer.Text = $"Error: {ex.Message}. Is Ollama running with the model pulled?";
         }
         finally
         {
@@ -132,6 +176,26 @@
             await InvokeAsync(StateHasChanged);
             await ScrollToBottomAsync();
         }
+    }
+
+    private void ClearChat()
+    {
+        _messages.Clear();
+    }
+
+    // Keep the most recent turns whose cumulative length fits the budget (drop oldest).
+    private static IReadOnlyList<StrongKingJames.Core.Models.ChatMessage> TrimToBudget(
+        List<StrongKingJames.Core.Models.ChatMessage> turns, int maxChars)
+    {
+        var kept = new List<StrongKingJames.Core.Models.ChatMessage>();
+        var total = 0;
+        for (var i = turns.Count - 1; i >= 0; i--)
+        {
+            total += turns[i].Content.Length;
+            if (total > maxChars && kept.Count > 0) break;
+            kept.Insert(0, turns[i]);
+        }
+        return kept;
     }
 
     private async Task ScrollToBottomAsync()
