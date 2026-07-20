@@ -1381,15 +1381,18 @@ public class SearchService(BibleDbContext db) : ISearchService
         float[] queryEmbedding, int topK, CancellationToken ct = default)
     {
         var q = new Vector(queryEmbedding);
+        // Project the cosine distance once and reuse it for both ordering and Score,
+        // so pgvector's distance is not computed twice per candidate row.
         return await db.VerseEmbeddings
-            .OrderBy(e => e.Embedding.CosineDistance(q))
+            .Select(e => new { e.VerseId, Distance = e.Embedding.CosineDistance(q) })
+            .OrderBy(x => x.Distance)
             .Take(topK)
-            .Join(db.Verses, e => e.VerseId, v => v.Id, (e, v) => new { e, v })
+            .Join(db.Verses, x => x.VerseId, v => v.Id, (x, v) => new { x.Distance, v })
             .Select(x => new SearchResult(
                 x.v.Id, x.v.OsisId,
                 x.v.Book!.Name + " " + x.v.Chapter + ":" + x.v.VerseNumber,
                 x.v.Text,
-                1.0 - x.e.Embedding.CosineDistance(q)))
+                1.0 - x.Distance))
             .ToListAsync(ct);
     }
 }
