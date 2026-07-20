@@ -14,7 +14,11 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddBibleData(builder.Configuration.GetConnectionString("bible")!);
+var bibleConn = builder.Configuration.GetConnectionString("bible")
+    ?? throw new InvalidOperationException(
+        "Connection string 'bible' not found. It is injected by the Aspire AppHost; " +
+        "to run the web app standalone set the ConnectionStrings__bible environment variable.");
+builder.Services.AddBibleData(bibleConn);
 
 var ollama = builder.Configuration.GetSection("Ollama").Get<OllamaOptions>() ?? new();
 builder.Services.AddSingleton(ollama);
