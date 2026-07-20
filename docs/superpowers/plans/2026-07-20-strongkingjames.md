@@ -1414,10 +1414,10 @@ git commit -m "feat(data): pgvector semantic search service with test"
 
 ## Phase 5 — Importer
 
-### Task 13: ImporterOptions and OSIS parser (TDD)
+### Task 13: OSIS parser (TDD)
 
 **Files:**
-- Create: `src/StrongKingJames.Importer/ImporterOptions.cs`, `src/StrongKingJames.Importer/Parsing/OsisParser.cs`
+- Create: `src/StrongKingJames.Importer/Parsing/OsisParser.cs` (ImporterOptions.cs is created later, in Task 17)
 - Test: `tests/StrongKingJames.Importer.Tests/OsisParserTests.cs`, `tests/StrongKingJames.Importer.Tests/TestData/sample-osis.xml`
 
 The parser reads OSIS XML and yields `Verse` objects (with `VerseWord`s and plain `Text`). OSIS marks verses with `<verse osisID="Gen.1.1">...</verse>` and tagged words with `<w lemma="strong:H430">God</w>`. Untagged text between `<w>` elements (punctuation, supplied words in `<transChange>`) becomes `VerseWord`s with `StrongsNumber = null`.
