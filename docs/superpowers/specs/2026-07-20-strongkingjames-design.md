@@ -78,7 +78,11 @@ status is documented.
 - `verse_words` — `id`, `verse_id`, `position`, `word_text`, `strongs_number`
   (nullable; a word may carry none). A word with multiple Strong's tags produces
   multiple rows at the same position. Indexed on `strongs_number` for concordance
-  lookups.
+  lookups. **The browse view is reconstructed from `verse_words`**, so the importer
+  must preserve display fidelity: untagged tokens (punctuation, italicized supplied
+  words, plain words) are stored as rows with `strongs_number = NULL`, in order.
+  `verses.text` is the concatenated plain text kept for search results and RAG
+  prompts, not the source of the interactive rendering.
 - `strongs_entries` — `number` (PK, e.g. `H7225`), `lemma`, `transliteration`,
   `pronunciation`, `definition`, `kjv_usage`.
 - `verse_embeddings` — `verse_id` (PK/FK), `embedding vector(768)`, with an HNSW
@@ -113,8 +117,9 @@ list with book/chapter/verse links.
 
 ### Error handling
 - Ollama unreachable → UI banner explaining Ollama must be running, with the
-  configured URL; search falls back to a disabled state, browsing/concordance still
-  work (they don't need Ollama).
+  configured URL. Only the Ollama-dependent modes are disabled: semantic search and
+  chat. Reference navigation, Strong's-number search, browsing, and the concordance
+  keep working (they don't need Ollama).
 - Model not pulled → surfaced with the exact `ollama pull` command.
 - Import failures are per-stage and resumable; partial imports are detectable
   (counts reported at the end).
@@ -124,7 +129,7 @@ list with book/chapter/verse links.
 - `GET /api/books`, `GET /api/books/{book}/chapters/{ch}` (verses with word tags)
 - `GET /api/strongs/{number}`, `GET /api/strongs/{number}/verses`
 - `GET /api/search?q=...&mode=auto|reference|strongs|semantic`
-- `POST /api/chat` (streams the RAG answer)
+- `POST /api/chat` (streams the RAG answer as Server-Sent Events)
 
 The Blazor UI uses the underlying services directly (same process); the API is a
 thin layer over the same service interfaces.
@@ -145,7 +150,9 @@ thin layer over the same service interfaces.
 - `docker-compose.yml`: PostgreSQL (pgvector image), Ollama, and the web app.
 - README: prerequisites, where to download the OSIS/dictionary XML, `ollama pull`
   commands, importer usage, compose instructions.
-- CI (GitHub Actions): build + unit tests on push.
+- CI (GitHub Actions): build + unit tests on push. The Testcontainers integration
+  suite is run locally by contributors, not in CI (deliberate, to keep CI simple
+  and Docker-free).
 
 ## Out of scope (this phase)
 
