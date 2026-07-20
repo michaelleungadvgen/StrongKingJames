@@ -30,6 +30,7 @@ public class RagServiceTests
     private sealed class FakeChat : IChatService
     {
         public async IAsyncEnumerable<string> StreamAsync(IReadOnlyList<ChatMessage> m,
+            string? model = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             Assert.Contains(m, x => x.Content.Contains("For God so loved the world"));

@@ -1,47 +1,65 @@
 @namespace StrongKingJames.Web.Components.Shared
 @inject IBibleRepository Repo
+@inject IChatService Chat
 
-<div class="strongs-popover">
-    <div class="strongs-popover-header">
-        <strong>Strong's</strong>
-        <button type="button" class="strongs-close" @onclick="OnClose">Close</button>
+<div class="modal-backdrop" @onclick="OnClose">
+    <div class="strongs-modal" @onclick:stopPropagation="true">
+        <div class="strongs-modal-header">
+            <strong>Strong's</strong>
+            <button type="button" class="strongs-close" @onclick="OnClose" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="strongs-modal-body">
+            @if (_loading)
+            {
+                <p class="strongs-loading">Loading...</p>
+            }
+            else
+            {
+                @foreach (var number in Numbers)
+                {
+                    var entry = _entries.FirstOrDefault(e => e.Number == number);
+                    <div class="strongs-entry">
+                        @if (entry is null)
+                        {
+                            <div class="strongs-number">@number</div>
+                            <p class="strongs-none">No entry found (has the Strong's dictionary been imported?)</p>
+                        }
+                        else
+                        {
+                            <div class="strongs-number">@entry.Number</div>
+                            <dl class="strongs-fields">
+                                <dt>Lemma</dt>
+                                <dd>@entry.Lemma</dd>
+                                <dt>Transliteration</dt>
+                                <dd>@entry.Transliteration</dd>
+                                <dt>Pronunciation</dt>
+                                <dd>@entry.Pronunciation</dd>
+                                <dt>Definition</dt>
+                                <dd>@entry.Definition</dd>
+                                <dt>KJV Usage</dt>
+                                <dd>@entry.KjvUsage</dd>
+                            </dl>
+
+                            <div class="strongs-actions">
+                                <button type="button" class="explain-btn"
+                                        @onclick="() => ExplainAsync(entry)"
+                                        disabled="@_explainingNumbers.Contains(entry.Number)">
+                                    @(_explainingNumbers.Contains(entry.Number) ? "Explaining…" : "✨ Explain with AI")
+                                </button>
+                                <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
+                            </div>
+
+                            @if (_explanations.TryGetValue(entry.Number, out var explanation) && !string.IsNullOrEmpty(explanation))
+                            {
+                                <div class="strongs-explanation">@explanation</div>
+                            }
+                        }
+                    </div>
+                }
+            }
+        </div>
     </div>
-
-    @if (_loading)
-    {
-        <p class="strongs-loading">Loading...</p>
-    }
-    else
-    {
-        @foreach (var number in Numbers)
-        {
-            var entry = _entries.FirstOrDefault(e => e.Number == number);
-            <div class="strongs-entry">
-                @if (entry is null)
-                {
-                    <div class="strongs-number">@number</div>
-                    <p class="strongs-none">No entry found (has the Strong's dictionary been imported?)</p>
-                }
-                else
-                {
-                    <div class="strongs-number">@entry.Number</div>
-                    <dl class="strongs-fields">
-                        <dt>Lemma</dt>
-                        <dd>@entry.Lemma</dd>
-                        <dt>Transliteration</dt>
-                        <dd>@entry.Transliteration</dd>
-                        <dt>Pronunciation</dt>
-                        <dd>@entry.Pronunciation</dd>
-                        <dt>Definition</dt>
-                        <dd>@entry.Definition</dd>
-                        <dt>KJV Usage</dt>
-                        <dd>@entry.KjvUsage</dd>
-                    </dl>
-                }
-                <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
-            </div>
-        }
-    }
 </div>
 
 @code {
@@ -52,12 +70,17 @@
     private string _loadedKey = "";
     private bool _loading;
 
+    private readonly Dictionary<string, string> _explanations = new();
+    private readonly HashSet<string> _explainingNumbers = new();
+
     protected override async Task OnParametersSetAsync()
     {
         var key = string.Join(",", Numbers);
         if (key == _loadedKey) return;
         _loadedKey = key;
         _loading = true;
+        _explanations.Clear();
+        _explainingNumbers.Clear();
         var entries = new List<StrongsEntry>();
         foreach (var number in Numbers)
         {
@@ -66,5 +89,30 @@
         }
         _entries = entries;
         _loading = false;
+    }
+
+    private async Task ExplainAsync(StrongsEntry entry)
+    {
+        if (_explainingNumbers.Contains(entry.Number)) return;
+        _explainingNumbers.Add(entry.Number);
+        _explanations[entry.Number] = "";
+        try
+        {
+            var messages = StrongKingJames.Core.Rag.StrongsExplainPromptBuilder.Build(entry);
+            await foreach (var chunk in Chat.StreamAsync(messages))
+            {
+                _explanations[entry.Number] += chunk;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            _explanations[entry.Number] = $"Could not generate an explanation: {ex.Message}. Is Ollama running?";
+        }
+        finally
+        {
+            _explainingNumbers.Remove(entry.Number);
+            await InvokeAsync(StateHasChanged);
+        }
     }
 }

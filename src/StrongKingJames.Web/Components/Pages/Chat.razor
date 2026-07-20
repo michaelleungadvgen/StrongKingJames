@@ -1,61 +1,139 @@
 @page "/chat"
 @rendermode InteractiveServer
 @inject IRagService Rag
+@inject StrongKingJames.Web.Ollama.OllamaHealth Health
 
 <PageTitle>Chat - StrongKingJames</PageTitle>
 
 <h1>Ask the Bible</h1>
 <OllamaStatusBanner />
 
+<div class="chat-controls">
+    <label for="model-select">Model:</label>
+    <select id="model-select" @bind="_selectedModel" disabled="@(_busy || _models.Count == 0)">
+        @if (_models.Count == 0)
+        {
+            <option value="">(loading models…)</option>
+        }
+        @foreach (var m in _models)
+        {
+            <option value="@m">@m</option>
+        }
+    </select>
+    <button type="button" class="chat-clear" @onclick="ClearChat" disabled="@(_busy || _history.Count == 0)">New chat</button>
+</div>
+
+<div class="chat-transcript">
+    @foreach (var msg in _history)
+    {
+        <div class="chat-msg @(msg.Role == "user" ? "chat-msg-user" : "chat-msg-assistant")">
+            <div class="chat-role">@(msg.Role == "user" ? "You" : "Assistant")</div>
+            <div class="chat-bubble">@msg.Content</div>
+        </div>
+    }
+    @if (_busy)
+    {
+        <div class="chat-msg chat-msg-assistant">
+            <div class="chat-role">Assistant</div>
+            <div class="chat-bubble">@(_streaming.Length == 0 ? "…" : _streaming)</div>
+        </div>
+    }
+    @if (!_busy && _lastCitations.Count > 0)
+    {
+        <div class="citations">
+            <strong>Citations:</strong>
+            <ul>
+                @foreach (var c in _lastCitations)
+                {
+                    <li><a href="@CitationLink(c)">@c</a></li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
 <div class="chat">
     <textarea @bind="_question" @bind:event="oninput" rows="3" placeholder="Ask a question..." disabled="@_busy"></textarea>
     <button type="button" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
 </div>
 
-@if (!string.IsNullOrEmpty(_answer))
-{
-    <div class="answer">@_answer</div>
-}
-@if (_citations.Count > 0)
-{
-    <div class="citations">
-        <strong>Citations:</strong>
-        <ul>
-            @foreach (var c in _citations)
-            {
-                <li><a href="@CitationLink(c)">@c</a></li>
-            }
-        </ul>
-    </div>
-}
-
 @code {
+    // Approximate character budget for prior turns sent as context. Older turns beyond this
+    // are dropped from what we send (but still shown in the transcript).
+    private const int HistoryContextBudgetChars = 8000;
+
     private string _question = "";
-    private string _answer = "";
     private bool _busy;
-    private IReadOnlyList<string> _citations = [];
+    private string _streaming = "";
+    private readonly List<ChatMessage> _history = [];
+    private IReadOnlyList<string> _lastCitations = [];
+    private List<string> _models = [];
+    private string _selectedModel = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = (await Health.ListModelsAsync()).ToList();
+        if (_models.Count > 0)
+            _selectedModel = _models[0];
+    }
 
     private async Task AskAsync()
     {
-        if (string.IsNullOrWhiteSpace(_question)) return;
-        _busy = true; _answer = ""; _citations = [];
+        if (_busy || string.IsNullOrWhiteSpace(_question)) return;
+
+        var question = _question.Trim();
+        _question = "";
+        _lastCitations = [];
+
+        // Prior completed turns (before this question), trimmed to the context budget.
+        var priorContext = TrimToBudget(_history, HistoryContextBudgetChars);
+
+        _history.Add(new ChatMessage("user", question));
+        _streaming = "";
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        var model = string.IsNullOrWhiteSpace(_selectedModel) ? null : _selectedModel;
         try
         {
-            await foreach (var chunk in Rag.AnswerAsync(_question))
+            await foreach (var chunk in Rag.AnswerAsync(question, model, priorContext))
             {
-                _answer += chunk;
+                _streaming += chunk;
                 await InvokeAsync(StateHasChanged);
             }
-            _citations = CitationExtractor.Extract(_answer);
+            _history.Add(new ChatMessage("assistant", _streaming));
+            _lastCitations = CitationExtractor.Extract(_streaming);
         }
         catch (Exception ex)
         {
-            _answer = $"Error: {ex.Message}. Is Ollama running with the models pulled?";
+            _history.Add(new ChatMessage("assistant",
+                $"Error: {ex.Message}. Is Ollama running with the model pulled?"));
         }
         finally
         {
+            _streaming = "";
             _busy = false;
         }
+    }
+
+    private void ClearChat()
+    {
+        _history.Clear();
+        _lastCitations = [];
+    }
+
+    // Keep the most recent turns whose cumulative length fits the budget (drop oldest).
+    private static IReadOnlyList<ChatMessage> TrimToBudget(List<ChatMessage> turns, int maxChars)
+    {
+        var kept = new List<ChatMessage>();
+        var total = 0;
+        for (var i = turns.Count - 1; i >= 0; i--)
+        {
+            total += turns[i].Content.Length;
+            if (total > maxChars && kept.Count > 0) break;
+            kept.Insert(0, turns[i]);
+        }
+        return kept;
     }
 
     // Turn "John 3:16" into "/browse/John/3" (best-effort; book name may differ from abbrev).

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText osisIDWork="Strong" xml:lang="en">
+    <div type="entry" n="430">
+      <w gloss="93c" lemma="אֱלֹהִים" morph="n-m" POS="el-o-heem'" xlit="ʼĕlôhîym" ID="H430" xml:lang="heb">אלהים</w>
+      <foreign xml:lang="grc"><w gloss="G:2316" /></foreign>
+      <list><item>1) rulers, judges</item></list>
+      <note type="exegesis">plural of <w lemma="אֱלוֹהַּ" POS="el-o'-ah" src="433" xlit="ʼĕlôwahh"/>;</note>
+      <note type="explanation"><hi>gods</hi> in the ordinary sense; but specifically used (in the plural thus) of <hi>the supreme God</hi>; occasionally applied by way of deference to <hi>magistrates</hi></note>
+      <note type="translation">angels, God (gods) (-dess, -ly), great, judges, mighty.</note>
+    </div>
+  </osisText>
+</osis>

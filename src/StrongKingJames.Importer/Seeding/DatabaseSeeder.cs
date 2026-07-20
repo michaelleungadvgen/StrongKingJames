@@ -58,9 +58,10 @@ public class DatabaseSeeder(BibleDbContext db)
         // Resume-safe: track already-present numbers so a partial run resumes and Hebrew/Greek don't collide.
         var existingNumbers = (await db.StrongsEntries.Select(e => e.Number).ToListAsync(ct)).ToHashSet();
         var parser = new StrongsDictionaryParser();
-        foreach (var path in new[] { hebrewPath, greekPath })
+        var sources = new[] { parser.ParseHebrew(hebrewPath), parser.ParseGreek(greekPath) };
+        foreach (var source in sources)
         {
-            var entries = parser.Parse(path)
+            var entries = source
                 .GroupBy(e => e.Number).Select(g => g.First())  // defensive de-dup within a file
                 .Where(e => existingNumbers.Add(e.Number))      // skip numbers already seeded (prior run or earlier file)
                 .ToList();

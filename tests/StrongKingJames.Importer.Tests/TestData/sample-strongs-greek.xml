@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes'?>
+<!DOCTYPE strongsdictionary [
+   <!ELEMENT strongsdictionary (entries) >
+   <!ELEMENT entries (entry)+ >
+   <!ELEMENT entry (#PCDATA|strongs|greek|pronunciation|strongs_derivation|strongs_def|kjv_def)* >
+   <!ATTLIST entry strongs CDATA #REQUIRED >
+   <!ELEMENT greek EMPTY >
+   <!ATTLIST greek BETA CDATA #IMPLIED
+                   unicode CDATA #REQUIRED
+                   translit CDATA #REQUIRED >
+   <!ELEMENT strongs (#PCDATA) >
+   <!ELEMENT pronunciation EMPTY >
+   <!ATTLIST pronunciation strongs CDATA #REQUIRED >
+   <!ELEMENT strongs_derivation (#PCDATA|greek)* >
+   <!ELEMENT strongs_def (#PCDATA) >
+   <!ELEMENT kjv_def (#PCDATA) >
+]>
+<strongsdictionary>
+  <entries>
+    <entry strongs="00025">
+      <strongs>25</strongs>
+      <greek BETA="A)GAPA/W" unicode="ἀγαπάω" translit="agapao"/>
+      <pronunciation strongs="ag-ap-ah'-o"/>
+      <strongs_derivation>perhaps from <greek BETA="A)/GAN" unicode="ἄγαν" translit="agan"/> (much);</strongs_derivation>
+      <strongs_def> to love (in a social or moral sense)</strongs_def>
+      <kjv_def>:--(be-)love(-ed).</kjv_def>
+    </entry>
+  </entries>
+</strongsdictionary>

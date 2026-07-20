@@ -10,11 +10,12 @@ public class OllamaChatService(HttpClient http, OllamaOptions options) : IChatSe
 {
     public async IAsyncEnumerable<string> StreamAsync(
         IReadOnlyList<ChatMessage> messages,
+        string? model = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var request = new
         {
-            model = options.ChatModel,
+            model = string.IsNullOrWhiteSpace(model) ? options.ChatModel : model,
             stream = true,
             messages = messages.Select(m => new { role = m.Role, content = m.Content }),
         };
