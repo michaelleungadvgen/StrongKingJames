@@ -1831,7 +1831,9 @@ public class OllamaOptions
 {
     public string BaseUrl { get; set; } = "http://localhost:11434";
     public string EmbeddingModel { get; set; } = "nomic-embed-text";
-    public string ChatModel { get; set; } = "llama3.1";
+    // Pinned to the tag actually installed on the host; bare "llama3.1" resolves to
+    // ":latest" which may not be pulled. Override via the appsettings Ollama section.
+    public string ChatModel { get; set; } = "llama3.1:8b";
 }
 ```
 
@@ -2156,7 +2158,7 @@ git commit -m "feat(core): RAG orchestration service with tests"
   "Ollama": {
     "BaseUrl": "http://localhost:11434",
     "EmbeddingModel": "nomic-embed-text",
-    "ChatModel": "llama3.1"
+    "ChatModel": "llama3.1:8b"
   }
 }
 ```
