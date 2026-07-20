@@ -1,0 +1,17 @@
+{
+  "maps": [
+    { "k": 0, "v": [
+      ["In the beginning", ["H7225"]],
+      ["God", ["H430"]],
+      ["created", ["H1254"]],
+      ["the heaven", ["H8064"]],
+      ["and the earth.", ["H776"]]
+    ] },
+    { "k": 23145, "v": [
+      ["For", []],
+      ["God", ["G2316"]],
+      ["so loved", ["G3779", "G25"]],
+      ["the world,", ["G2889"]]
+    ] }
+  ]
+}

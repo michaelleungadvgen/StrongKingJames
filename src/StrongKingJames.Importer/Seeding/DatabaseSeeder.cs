@@ -14,14 +14,14 @@ public class DatabaseSeeder(BibleDbContext db)
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task SeedVersesAsync(string osisPath, CancellationToken ct = default)
+    // Accepts already-parsed verses so the seeder is format-agnostic (OSIS or kjs JSON).
+    public async Task SeedVersesAsync(IEnumerable<ParsedVerse> verses, CancellationToken ct = default)
     {
         // Resume-safe: skip verses already present so a crash mid-seed can be re-run to completion.
         var existing = (await db.Verses.Select(v => v.OsisId).ToListAsync(ct)).ToHashSet();
         var byAbbrev = await db.Books.ToDictionaryAsync(b => b.Abbreviation, ct);
-        var parser = new OsisParser();
         var batch = new List<Verse>();
-        foreach (ParsedVerse pv in parser.Parse(osisPath))
+        foreach (ParsedVerse pv in verses)
         {
             if (!byAbbrev.TryGetValue(pv.BookAbbrev, out var book)) continue;
             if (existing.Contains(pv.OsisId)) continue;
@@ -68,5 +68,18 @@ public class DatabaseSeeder(BibleDbContext db)
             await db.SaveChangesAsync(ct);
             db.ChangeTracker.Clear();
         }
+    }
+
+    // Seeds Strong's entries from the kjs JSON dictionary (single file, both Hebrew + Greek).
+    public async Task SeedStrongsFromJsonAsync(string dictPath, CancellationToken ct = default)
+    {
+        var existingNumbers = (await db.StrongsEntries.Select(e => e.Number).ToListAsync(ct)).ToHashSet();
+        var entries = new KjsStrongsParser().Parse(dictPath)
+            .GroupBy(e => e.Number).Select(g => g.First())
+            .Where(e => existingNumbers.Add(e.Number))
+            .ToList();
+        db.StrongsEntries.AddRange(entries);
+        await db.SaveChangesAsync(ct);
+        db.ChangeTracker.Clear();
     }
 }

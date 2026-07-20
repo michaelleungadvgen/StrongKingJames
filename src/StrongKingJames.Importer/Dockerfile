@@ -28,6 +28,7 @@ WORKDIR /app
 COPY --from=build /app/publish ./
 
 # Default data paths point at the bind-mounted /data directory (see docker-compose.yml).
-# Override with --osis / --hebrew / --greek if needed.
+# The kjs JSON source carries per-word Strong's numbers for both OT (H####) and NT (G####).
+# Override with --format osis --osis ... --hebrew ... --greek ... to use OSIS sources instead.
 ENTRYPOINT ["dotnet", "StrongKingJames.Importer.dll"]
-CMD ["--osis", "/data/kjv.xml", "--hebrew", "/data/strongshebrew.xml", "--greek", "/data/strongsgreek.xml"]
+CMD ["--format", "kjs", "--kjs-bible", "/data/kjv_pure.json", "--kjs-strongs", "/data/strong_pure.json", "--kjs-dict", "/data/strong_dict.json"]

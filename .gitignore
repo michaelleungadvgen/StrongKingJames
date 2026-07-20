@@ -481,6 +481,8 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Bible source data (public domain, downloaded separately)
+# Bible source data (downloaded separately; includes GPL-3.0 kjs JSON, not redistributable)
 data/*.xml
+data/*.json
+data/*.zip
 *.user

@@ -46,56 +46,98 @@ _Add screenshots here._
   `rollForward: latestFeature`).
 - The Aspire CLI: `dotnet tool install --global aspire.cli`.
 
-## Get the data
+## Initialize the project
 
-The Bible text and lexicon data are **not committed** to this repository (`data/*.xml` is gitignored).
-Download the three public-domain / freely-licensed files into a `./data` directory at the repo root:
+Before you can run StrongKingJames for the first time, do these two things once.
+
+### 1. Start Ollama and pull the models
+
+[Ollama](https://ollama.com) must be installed and running **on the host** (not in Docker). Containers
+reach it via `host.docker.internal:11434`, so Ollama must listen on all interfaces:
+
+- Set `OLLAMA_HOST=0.0.0.0` before starting Ollama (on macOS/Windows set it in the Ollama app's
+  environment; on Linux set it for the `ollama serve` process / systemd unit).
+- Pull the models used for embeddings and chat:
+
+  ```bash
+  ollama pull nomic-embed-text
+  ollama pull llama3.1:8b
+  ```
+
+### 2. Download the Bible data
+
+The Bible text and lexicon data are **not committed** to this repository (`data/` is gitignored).
+You need a KJV text **with Strong's numbers on every original-language word**, covering **both** the
+Old Testament (Hebrew `H####`) and the New Testament (Greek `G####`), plus a matching lexicon.
+
+The recommended source is the [1John419/kjs](https://github.com/1John419/kjs) JSON files, which carry
+per-word Strong's tags for the whole Bible (≈412k tagged words, including ≈132k Greek tags in the NT)
+and a single Hebrew+Greek lexicon. Download the three files into a `./data` directory at the repo root:
 
 ```bash
 mkdir -p data
 
-# KJV OSIS with Strong's numbers (public domain text)
-curl -L -o data/kjv.xml \
-  https://raw.githubusercontent.com/seven1m/open-bibles/master/eng-kjv.osis.xml
+# KJV text + verse index (31,102 verses)
+curl -L -o data/kjv_pure.json \
+  https://raw.githubusercontent.com/1John419/kjs/master/json/kjv_pure.json
 
-# Strong's Hebrew dictionary
-curl -L -o data/strongshebrew.xml \
-  https://raw.githubusercontent.com/openscriptures/strongs/master/hebrew/StrongHebrewG.xml
+# Per-word Strong's numbers (joined to verses by index)
+curl -L -o data/strong_pure.json \
+  https://raw.githubusercontent.com/1John419/kjs/master/json/strong_pure.json
 
-# Strong's Greek dictionary (zipped — extract the XML)
-curl -L -o data/strongsgreek.zip \
-  https://raw.githubusercontent.com/openscriptures/strongs/master/greek/StrongsGreekDictionaryXML_1.4.zip
-unzip -p data/strongsgreek.zip '*.xml' > data/strongsgreek.xml
-rm data/strongsgreek.zip
+# Strong's Hebrew + Greek lexicon (one file, both testaments)
+curl -L -o data/strong_dict.json \
+  https://raw.githubusercontent.com/1John419/kjs/master/json/strong_dict.json
 ```
 
-After this you should have `data/kjv.xml`, `data/strongshebrew.xml`, and `data/strongsgreek.xml`.
+After this you should have `data/kjv_pure.json`, `data/strong_pure.json`, and `data/strong_dict.json`.
+The importer defaults to this `kjs` format.
 
-**Attribution & licensing:** The KJV text is in the **public domain**. The Strong's lemma/morphology
-lexicon data from [openscriptures](https://github.com/openscriptures/strongs) is licensed
-**CC-BY 4.0** — attribution is required if you redistribute it. Please retain this notice.
+> **Why not the `eng-kjv.osis.xml` from seven1m/open-bibles?** That file is plain KJV text with
+> **no Strong's tags at all**, so neither testament would get clickable Strong's words. The kjs
+> source is used instead precisely because it tags both the OT and the NT.
 
-## Quick start (Docker)
+**Attribution & licensing:** The KJV text is in the **public domain**. The
+[1John419/kjs](https://github.com/1John419/kjs) data (text + Strong's tagging + lexicon) is
+**GPL-3.0** © Clayton Carney. StrongKingJames is MIT-licensed and does **not** bundle or
+redistribute the kjs data — you download it yourself at runtime as an input to the importer.
+If you redistribute the kjs files yourself, you must comply with their GPL-3.0 terms.
 
-With Ollama running on the host (models pulled) and the data files in `./data`:
+### Alternative: OSIS sources
+
+The importer also still supports an OSIS pipeline (`--format osis`) for users who already have a
+Strong's-tagged KJV OSIS file. Note: the openscriptures Greek dictionary
+(`StrongsGreekDictionaryXML_1.4`) is a non-OSIS DTD format that the OSIS parser does **not** load,
+so the OSIS path currently gives Hebrew lexicon entries but no Greek lexicon entries — the `kjs`
+path above is recommended for full OT+NT coverage.
+
+```bash
+mkdir -p data
+curl -L -o data/kjv.xml \
+  https://raw.githubusercontent.com/seven1m/open-bibles/master/eng-kjv.osis.xml
+curl -L -o data/strongshebrew.xml \
+  https://raw.githubusercontent.com/openscriptures/strongs/master/hebrew/StrongHebrewG.xml
+```
+
+## Run the project
+
+Once Ollama is running, the models are pulled, and the `data/` files are in place, choose one of the
+run options below. **First run is slow:** the importer embeds ~31,000 verses through Ollama, which
+can take a while depending on your hardware. Subsequent runs reuse the database and skip
+already-embedded verses.
+
+### Option 1: Docker Compose (simplest)
 
 ```bash
 docker compose up --build
 ```
 
-This will:
-
-1. Start **PostgreSQL** (pgvector) in a container with a persistent named volume.
-2. Run the **importer** to completion — it applies migrations, seeds the books/verses/Strong's
-   entries, then backfills vector embeddings by calling the host's Ollama.
-3. Start the **web app** once the importer finishes, served at **http://localhost:8080**.
-
-> **First run is slow.** The importer embeds ~31,000 verses through Ollama, which can take a while
-> depending on your hardware. Subsequent runs reuse the database volume and skip already-embedded verses.
+This starts PostgreSQL, runs the importer to completion, then serves the web app at
+**http://localhost:8080**.
 
 To stop: `docker compose down`. To also wipe the database: `docker compose down -v`.
 
-## Developer start (Aspire)
+### Option 2: .NET Aspire (recommended for development)
 
 For an interactive dev loop with the Aspire dashboard (logs, traces, resource graph):
 
@@ -107,19 +149,54 @@ Aspire launches the PostgreSQL container, runs the importer to completion, and t
 app — with the dashboard showing everything. **Ollama must be running on the host** (the AppHost
 passes `http://localhost:11434` by default via the `ollama-url` parameter).
 
+### Option 3: VS Code
+
+Open the repo folder in VS Code. Make sure you have the [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit)
+and the .NET 10 SDK installed. Then:
+
+1. Open a terminal in VS Code (`Ctrl+` `` ` ``).
+2. Run the initialization steps above (Ollama + `data/` download).
+3. Run Aspire from the terminal:
+
+   ```bash
+   aspire run --project src/StrongKingJames.AppHost
+   ```
+
+The Aspire dashboard opens automatically; the web app is served once the importer finishes.
+
+### Option 4: Visual Studio 2022
+
+Visual Studio 2022 must be **17.14+** to recognize the .NET 10 SDK. Open `StrongKingJames.slnx`,
+set `StrongKingJames.AppHost` as the startup project, and press **F5**. The AppHost orchestrates
+PostgreSQL, the importer, and the web app just like the command-line Aspire run.
+
 ## Manual importer run (optional)
 
-You can run the importer directly against any PostgreSQL instance:
+You can run the importer directly against any PostgreSQL instance. With the kjs JSON files in
+`./data` (the default `--format kjs`):
 
 ```bash
 dotnet run --project src/StrongKingJames.Importer -- \
+  --format kjs \
+  --kjs-bible data/kjv_pure.json \
+  --kjs-strongs data/strong_pure.json \
+  --kjs-dict data/strong_dict.json \
+  --connection "Host=localhost;Port=5432;Database=strongkingjames;Username=postgres;Password=postgres"
+```
+
+Or, with OSIS sources (`--format osis`):
+
+```bash
+dotnet run --project src/StrongKingJames.Importer -- \
+  --format osis \
   --osis data/kjv.xml \
   --hebrew data/strongshebrew.xml \
   --greek data/strongsgreek.xml \
   --connection "Host=localhost;Port=5432;Database=strongkingjames;Username=postgres;Password=postgres"
 ```
 
-Flags: `--osis`, `--hebrew`, `--greek`, `--connection`, `--ollama-url`, `--embedding-model`.
+Flags: `--format` (`kjs`|`osis`), `--kjs-bible`, `--kjs-strongs`, `--kjs-dict`, `--osis`,
+`--hebrew`, `--greek`, `--connection`, `--ollama-url`, `--embedding-model`.
 The connection string and Ollama URL can also come from configuration/environment
 (`ConnectionStrings__bible`, `Ollama__BaseUrl`).
 
@@ -131,7 +208,7 @@ The connection string and Ollama URL can also come from configuration/environmen
 | --- | --- |
 | `src/StrongKingJames.Core` | Domain models and services: Ollama embedding/chat clients, RAG pipeline. |
 | `src/StrongKingJames.Data` | EF Core `DbContext`, migrations, PostgreSQL + pgvector access. |
-| `src/StrongKingJames.Importer` | Console app: seeds the DB from the OSIS/lexicon XML and backfills embeddings, then exits. |
+| `src/StrongKingJames.Importer` | Console app: seeds the DB from kjs JSON (or OSIS) and backfills embeddings, then exits. |
 | `src/StrongKingJames.Web` | Blazor Server UI + minimal API endpoints (the app users interact with). |
 | `src/StrongKingJames.AppHost` | Aspire AppHost — declares the Postgres container, the Ollama URL parameter, and wires up the importer and web app. |
 | `src/StrongKingJames.ServiceDefaults` | Shared Aspire service defaults (telemetry, health checks, resilience). |
@@ -178,9 +255,13 @@ makes sense, and make sure `dotnet build` and the unit test suites pass. The CI 
 (`.github/workflows/ci.yml`) builds in Release and runs the Core and Importer test suites on every
 push and pull request.
 
+## Credits
+
+StrongKingJames is copyright **AdvanGeneration Pty Ltd** and is released under the MIT License.
+The project depends on many open-source libraries and data sets. See [CREDITS.md](CREDITS.md) for
+the full list of third-party software, infrastructure, and Bible data sources, along with their
+respective licenses.
+
 ## License
 
-Released under the [MIT License](LICENSE). Copyright (c) 2026 StrongKingJames contributors.
-
-The KJV text is public domain; the openscriptures Strong's lexicon data is CC-BY 4.0 (see
-**Get the data** above).
+Released under the [MIT License](LICENSE).

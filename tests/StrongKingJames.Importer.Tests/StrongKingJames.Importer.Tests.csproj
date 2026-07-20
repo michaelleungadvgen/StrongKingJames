@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <None Include="TestData\**\*.xml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

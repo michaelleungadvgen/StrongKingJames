@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+  <osisText osisIDWork="KJV">
+    <div type="book" osisID="John">
+      <chapter osisID="John.3">
+        <verse osisID="John.3.16" sID="John.3.16"/>
+        For <w lemma="strong:G3779">so</w> <w lemma="strong:G25">loved</w> <w lemma="strong:G2316">God</w> the world,
+        <verse eID="John.3.16"/>
+        <verse osisID="John.3.17" sID="John.3.17"/>
+        <w lemma="strong:G1063">For</w> God sent not his Son.
+        <verse eID="John.3.17"/>
+      </chapter>
+    </div>
+  </osisText>
+</osis>
