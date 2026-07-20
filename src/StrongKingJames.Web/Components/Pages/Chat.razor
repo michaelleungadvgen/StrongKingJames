@@ -51,14 +51,18 @@
                     <div class="chat-meta">
                         <span class="chat-name">@(msg.IsUser ? "You" : "StrongKingJames")</span>
                     </div>
-                    <div class="chat-bubble">
+                    <div class="chat-bubble @(msg.IsUser ? "" : "markdown")">
                         @if (string.IsNullOrEmpty(msg.Text) && !msg.IsUser)
                         {
                             <span class="chat-thinking">Thinking</span>
                         }
-                        else
+                        else if (msg.IsUser)
                         {
                             @msg.Text
+                        }
+                        else
+                        {
+                            @((MarkupString)StrongKingJames.Web.Rendering.MarkdownRenderer.ToHtml(msg.Text))
                         }
                     </div>
                     @if (!msg.IsUser && msg.Citations.Count > 0)

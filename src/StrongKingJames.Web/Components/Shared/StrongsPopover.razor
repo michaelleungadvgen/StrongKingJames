@@ -53,7 +53,9 @@
 
                         @if (_explanations.TryGetValue(entry.Number, out var explanation) && !string.IsNullOrEmpty(explanation))
                         {
-                            <div class="strongs-explanation">@explanation</div>
+                            <div class="strongs-explanation markdown">
+                                @((MarkupString)StrongKingJames.Web.Rendering.MarkdownRenderer.ToHtml(explanation))
+                            </div>
                         }
                     }
                 </div>
