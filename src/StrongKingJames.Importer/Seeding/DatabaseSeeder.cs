@@ -16,13 +16,15 @@ public class DatabaseSeeder(BibleDbContext db)
 
     public async Task SeedVersesAsync(string osisPath, CancellationToken ct = default)
     {
-        if (await db.Verses.AnyAsync(ct)) return;
+        // Resume-safe: skip verses already present so a crash mid-seed can be re-run to completion.
+        var existing = (await db.Verses.Select(v => v.OsisId).ToListAsync(ct)).ToHashSet();
         var byAbbrev = await db.Books.ToDictionaryAsync(b => b.Abbreviation, ct);
         var parser = new OsisParser();
         var batch = new List<Verse>();
         foreach (ParsedVerse pv in parser.Parse(osisPath))
         {
             if (!byAbbrev.TryGetValue(pv.BookAbbrev, out var book)) continue;
+            if (existing.Contains(pv.OsisId)) continue;
             // IMPORTANT: map ParsedVerse -> a plain Verse. EF cannot add the unmapped
             // ParsedVerse subclass to DbSet<Verse>; project to Verse (carry Words over).
             var verse = new Verse
@@ -53,12 +55,14 @@ public class DatabaseSeeder(BibleDbContext db)
 
     public async Task SeedStrongsAsync(string hebrewPath, string greekPath, CancellationToken ct = default)
     {
-        if (await db.StrongsEntries.AnyAsync(ct)) return;
+        // Resume-safe: track already-present numbers so a partial run resumes and Hebrew/Greek don't collide.
+        var existingNumbers = (await db.StrongsEntries.Select(e => e.Number).ToListAsync(ct)).ToHashSet();
         var parser = new StrongsDictionaryParser();
         foreach (var path in new[] { hebrewPath, greekPath })
         {
             var entries = parser.Parse(path)
                 .GroupBy(e => e.Number).Select(g => g.First())  // defensive de-dup within a file
+                .Where(e => existingNumbers.Add(e.Number))      // skip numbers already seeded (prior run or earlier file)
                 .ToList();
             db.StrongsEntries.AddRange(entries);
             await db.SaveChangesAsync(ct);

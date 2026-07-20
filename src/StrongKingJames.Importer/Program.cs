@@ -37,5 +37,15 @@ Console.WriteLine("Backfilling embeddings...");
 var backfiller = new EmbeddingBackfiller(db, embedder);
 var count = await backfiller.RunAsync(new Progress<int>(n => { if (n % 100 == 0) Console.WriteLine($"  embedded {n}..."); }));
 
-Console.WriteLine($"Done. Books={await db.Books.CountAsync()} Verses={await db.Verses.CountAsync()} " +
-                  $"VerseWords={await db.VerseWords.CountAsync()} Strongs={await db.StrongsEntries.CountAsync()} Embeddings(new)={count}");
+var bookCount = await db.Books.CountAsync();
+var verseCount = await db.Verses.CountAsync();
+var verseWordCount = await db.VerseWords.CountAsync();
+var strongsCount = await db.StrongsEntries.CountAsync();
+
+Console.WriteLine($"Done. Books={bookCount} Verses={verseCount} " +
+                  $"VerseWords={verseWordCount} Strongs={strongsCount} Embeddings(new)={count}");
+
+if (bookCount != 66)
+    Console.WriteLine($"WARNING: expected 66 books but found {bookCount} — import may be incomplete.");
+if (verseCount != 31102)
+    Console.WriteLine($"WARNING: expected 31102 KJV verses but found {verseCount} — import may be incomplete (check the OSIS source file).");
