@@ -1,0 +1,23 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Bible source data (downloaded separately, mounted at runtime)
+data/
+
+# Docs and IDE
+docs/
+.vs/
+.vscode/
+.idea/
+*.user
+
+# OS junk
+.DS_Store
+Thumbs.db
