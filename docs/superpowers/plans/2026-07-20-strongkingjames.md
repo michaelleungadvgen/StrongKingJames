@@ -4,9 +4,9 @@
 
 **Goal:** Build an open-source KJV Bible study tool with Strong's-number concordance, semantic search, and a local RAG chat assistant — Blazor Server UI over PostgreSQL/pgvector and Ollama.
 
-**Architecture:** A .NET 10 solution layered as Core (domain + interfaces), Data (EF Core + Npgsql + pgvector), Importer (console seeder), and Web (Blazor Server + minimal APIs), all orchestrated by **.NET Aspire**. An Aspire AppHost declares every resource — a pgvector PostgreSQL container, an Ollama container that pulls the required models, the importer (run-to-completion), and the web app — with connection strings and endpoints injected automatically via service discovery. The browse view is reconstructed word-by-word from `verse_words` so every tagged word is interactive. Ollama sits behind `IEmbeddingService`/`IChatService` interfaces so all pipeline logic is testable without a live model. Everything runs in containers: Aspire runs the dependencies as containers in dev, and `aspire publish` generates a Docker Compose file so the whole system (db, Ollama, importer, web) comes up with one command.
+**Architecture:** A .NET 10 solution layered as Core (domain + interfaces), Data (EF Core + Npgsql + pgvector), Importer (console seeder), and Web (Blazor Server + minimal APIs), all orchestrated by **.NET Aspire**. An Aspire AppHost declares every resource — a pgvector PostgreSQL container, the importer (run-to-completion), and the web app — with connection strings and endpoints injected automatically via service discovery. **Ollama runs on the host** (the user already has it installed and models pulled); Aspire references it as an external endpoint rather than starting a container for it. The browse view is reconstructed word-by-word from `verse_words` so every tagged word is interactive. Ollama sits behind `IEmbeddingService`/`IChatService` interfaces so all pipeline logic is testable without a live model. The .NET services and PostgreSQL are containerized: Aspire runs them in dev, and `aspire publish` generates a Docker Compose file so db + importer + web come up with one command, all pointing at the host's Ollama.
 
-**Tech Stack:** .NET 10, .NET Aspire (AppHost + ServiceDefaults), C#, ASP.NET Core Blazor Server, EF Core 10 + Npgsql, pgvector / `pgvector-dotnet`, Ollama (`nomic-embed-text`, `llama3.1`) via the CommunityToolkit Aspire Ollama integration, xUnit, Testcontainers, Docker / Docker Compose (Aspire-generated), GitHub Actions.
+**Tech Stack:** .NET 10, .NET Aspire (AppHost + ServiceDefaults), C#, ASP.NET Core Blazor Server, EF Core 10 + Npgsql, pgvector / `pgvector-dotnet`, host-installed Ollama (`nomic-embed-text`, `llama3.1`) referenced as an external Aspire resource, xUnit, Testcontainers, Docker / Docker Compose (Aspire-generated), GitHub Actions.
 
 **Reference spec:** `docs/superpowers/specs/2026-07-20-strongkingjames-design.md`
 
@@ -18,7 +18,10 @@ The implementer needs these installed locally:
 - .NET 10 SDK (`dotnet --version` → 10.x)
 - Docker Desktop, running (`docker ps` works) — Aspire runs all dependencies as containers, and Testcontainers needs it too
 - The Aspire CLI (`dotnet tool install -g Aspire.Cli`, then `aspire --version`) — used to run the AppHost and to publish the Docker Compose file
-- **Ollama is NOT installed on the host** — Aspire runs it as a container and pulls `nomic-embed-text` and `llama3.1` automatically. (Optional: a host Ollama can still be pointed at via config, but the default path is fully containerized.)
+- **Ollama running on the host** with the models pulled (the user already has Ollama installed):
+  - `ollama pull nomic-embed-text`
+  - `ollama pull llama3.1`
+  Aspire and the containers reach it at `http://localhost:11434` in dev and `http://host.docker.internal:11434` from inside containers. No Ollama container is started.
 
 Source data files (downloaded once, paths passed to the importer — NOT committed):
 - KJV OSIS XML from openscriptures: `kjv.xml`
@@ -271,11 +274,10 @@ Run:
 ```bash
 dotnet add src/StrongKingJames.AppHost reference src/StrongKingJames.Web src/StrongKingJames.Importer
 dotnet add src/StrongKingJames.AppHost package Aspire.Hosting.PostgreSQL
-dotnet add src/StrongKingJames.AppHost package CommunityToolkit.Aspire.Hosting.Ollama
 ```
-(Use latest versions compatible with the installed Aspire.)
+(Use latest versions compatible with the installed Aspire. No Ollama hosting package — Ollama is external.)
 
-- [ ] **Step 4: Write `AppHost.cs`** — declare pgvector, Ollama (with models), importer (run-to-completion), and web.
+- [ ] **Step 4: Write `AppHost.cs`** — declare pgvector, an external Ollama endpoint, importer (run-to-completion), and web.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -286,28 +288,27 @@ var postgres = builder.AddPostgres("postgres")
     .WithDataVolume();
 var bibleDb = postgres.AddDatabase("bible", databaseName: "strongkingjames");
 
-// Ollama container that pulls the models we need.
-var ollama = builder.AddOllama("ollama").WithDataVolume();
-var embedModel = ollama.AddModel("embed", "nomic-embed-text");
-var chatModel = ollama.AddModel("chat", "llama3.1");
+// Ollama runs on the HOST — reference it as an external endpoint, not a container.
+// A parameter (with a default) lets a container reach the host via host.docker.internal.
+var ollamaUrl = builder.AddParameter("ollama-url", "http://localhost:11434");
 
 // Importer: runs to completion, seeds DB and backfills embeddings, then exits.
 var importer = builder.AddProject<Projects.StrongKingJames_Importer>("importer")
     .WithReference(bibleDb).WaitFor(bibleDb)
-    .WithReference(embedModel).WaitFor(embedModel);
+    .WithEnvironment("Ollama__BaseUrl", ollamaUrl);
 
 // Web app: waits for the importer to finish seeding before serving.
 builder.AddProject<Projects.StrongKingJames_Web>("web")
     .WithReference(bibleDb).WaitFor(bibleDb)
-    .WithReference(embedModel).WithReference(chatModel).WaitFor(ollama)
+    .WithEnvironment("Ollama__BaseUrl", ollamaUrl)
     .WaitForCompletion(importer);
 
 builder.Build().Run();
 ```
 
 Notes for the engineer:
-- The exact Ollama integration API (`AddOllama`, `AddModel`, and how the model reference surfaces as a connection string/endpoint) comes from `CommunityToolkit.Aspire.Hosting.Ollama` — confirm method names against the installed package version and adjust.
-- `WithReference(bibleDb)` injects `ConnectionStrings__bible`; `WithReference(embedModel/chatModel)` injects the Ollama endpoint + model name. Tasks 17 and 20 read these instead of hardcoded config.
+- `WithReference(bibleDb)` injects `ConnectionStrings__bible`. The Ollama base URL is passed as the `Ollama__BaseUrl` environment variable (bound by `OllamaOptions`, Task 16/20). The embedding/chat model names stay in the app's config defaults (Task 20 appsettings).
+- For the published Compose (Task 25), set the `ollama-url` parameter to `http://host.docker.internal:11434` so the db/importer/web containers reach the host's Ollama. In dev (`aspire run`) the `http://localhost:11434` default works because the projects run on the host.
 
 - [ ] **Step 5: Wire ServiceDefaults into Web**
 
@@ -769,6 +770,9 @@ namespace StrongKingJames.Core.Rag;
 
 public static partial class CitationExtractor
 {
+    // Matches "Book c:v" including a leading ordinal (1/2/3) and a two-word book name.
+    // NOTE: multi-word names with lowercase connectors (e.g. "Song of Solomon") are only
+    // partially matched; broaden the book-name alternation here if full coverage is needed.
     [GeneratedRegex(@"(?:[1-3]\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+\d{1,3}:\d{1,3}")]
     private static partial Regex CitationRegex();
 
@@ -1813,7 +1817,7 @@ git commit -m "feat(importer): database seeder and book metadata"
 ### Task 16: Ollama embedding service + EmbeddingBackfiller
 
 **Files:**
-- Create: `src/StrongKingJames.Web/Ollama/OllamaOptions.cs`, `OllamaEmbeddingService.cs` (in Web, referenced by Importer via a shared registration — see note)
+- Create: `src/StrongKingJames.Core/Ollama/OllamaOptions.cs`, `src/StrongKingJames.Core/Ollama/OllamaEmbeddingService.cs` (placed in **Core** — see note — so both Web and Importer reuse them without a circular reference)
 - Create: `src/StrongKingJames.Importer/Seeding/EmbeddingBackfiller.cs`
 
 Note on placement: the Ollama HTTP clients are needed by both Web and Importer. To avoid a circular reference, create them in a small shared spot. Simplest: put `OllamaOptions`, `OllamaEmbeddingService`, `OllamaChatService` in **Core** under `Core/Ollama/` (Core already defines the interfaces). They use `System.Net.Http.Json` (in the framework), so Core needs no new package. Adjust namespaces accordingly. This plan places them in Core.
@@ -2145,7 +2149,7 @@ git commit -m "feat(core): RAG orchestration service with tests"
 - Modify: `src/StrongKingJames.Web/Program.cs`, `appsettings.json`
 - Create: `src/StrongKingJames.Web/Ollama/OllamaHealth.cs`
 
-- [ ] **Step 1: `appsettings.json`** — only local fallbacks; Aspire overrides `ConnectionStrings__bible` and the Ollama endpoint/model at runtime via `WithReference` (Task 2B). The `Ollama` section holds defaults for when the app is run outside Aspire:
+- [ ] **Step 1: `appsettings.json`** — Aspire injects `ConnectionStrings__bible` and overrides `Ollama__BaseUrl` (env var → config) at runtime. The `Ollama` section holds the model names and a local-dev default URL:
 
 ```json
 {
@@ -2174,10 +2178,9 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // Aspire injects ConnectionStrings__bible from the AppHost's WithReference(bibleDb).
 builder.Services.AddBibleData(builder.Configuration.GetConnectionString("bible")!);
 
-// Ollama endpoint/model come from Aspire references when orchestrated; fall back to the
-// appsettings Ollama section otherwise. ResolveOllamaOptions reads the Aspire connection
-// string ("embed"/"chat") if present, else the config section.
-var ollama = OllamaOptions.Resolve(builder.Configuration);
+// Ollama base URL comes from the Ollama__BaseUrl env var (Aspire sets it to the host
+// endpoint); model names come from the appsettings Ollama section.
+var ollama = builder.Configuration.GetSection("Ollama").Get<OllamaOptions>() ?? new();
 builder.Services.AddSingleton(ollama);
 builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
 builder.Services.AddHttpClient<IChatService, OllamaChatService>();
@@ -2191,7 +2194,7 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
 ```
 
-Add a small `OllamaOptions.Resolve(IConfiguration)` static in `Core/Ollama/OllamaOptions.cs` that prefers the Aspire-injected Ollama connection string (endpoint + model, exposed by the CommunityToolkit integration) and falls back to the `Ollama` config section. Confirm the exact connection-string shape the installed Ollama integration emits and map it here.
+Because `.NET` config maps the `Ollama__BaseUrl` environment variable onto `Ollama:BaseUrl`, binding the `Ollama` section is all that's needed — no custom resolver.
 
 - [ ] **Step 3: `OllamaHealth`** — a small service that pings `GET {BaseUrl}/api/tags` and reports reachable + whether required models are present, for the status banner.
 
@@ -2284,7 +2287,9 @@ public static class ApiEndpoints
             {
                 SearchMode.Strongs => Results.Ok(await repo.GetVersesByStrongsAsync(q.Trim())),
                 SearchMode.Semantic => Results.Ok(await search.SemanticSearchAsync(await embed.EmbedAsync(q), 20)),
-                _ => Results.Ok(await repo.GetVersesByStrongsAsync(q.Trim())) // reference handled in UI; API returns strongs/semantic
+                // Reference navigation is a UI concern; the API returns an empty list for
+                // reference-mode queries rather than mis-running a Strong's lookup.
+                _ => Results.Ok(Array.Empty<SearchResult>())
             };
         });
 
@@ -2466,7 +2471,7 @@ git commit -m "feat(web): streaming RAG chat page with citations"
 
 ### Task 25: README, LICENSE, Aspire-published Docker Compose, CI
 
-Everything runs in Docker. Rather than hand-maintain a Compose file, generate it from the Aspire AppHost (the single source of truth for topology) via the Docker Compose publisher, and commit the output.
+The .NET services and PostgreSQL run in Docker; Ollama runs on the host. Rather than hand-maintain a Compose file, generate it from the Aspire AppHost (the single source of truth for topology) via the Docker Compose publisher, and commit the output. The generated Compose has no Ollama service — the containers point at the host's Ollama via `host.docker.internal`.
 
 **Files:**
 - Create: `LICENSE`, `README.md`, `.github/workflows/ci.yml`
@@ -2488,25 +2493,26 @@ dotnet add src/StrongKingJames.AppHost package Aspire.Hosting.Docker
 
 - [ ] **Step 3: Generate the Compose file**
 
-Run:
+Set the `ollama-url` parameter to the host address reachable from containers, then publish:
 ```bash
-aspire publish --project src/StrongKingJames.AppHost --publisher compose --output-path .
+aspire publish --project src/StrongKingJames.AppHost --publisher compose --output-path . -- --ollama-url http://host.docker.internal:11434
 ```
-Expected: a `docker-compose.yml` (plus any `.env`) describing db (pgvector), ollama, importer, and web with the right dependencies, volumes, and environment. Review it; commit the generated file so users who only want `docker compose up` don't need the Aspire CLI.
+(Or set the parameter's published value via the AppHost. The key point: the generated env for db/importer/web uses `host.docker.internal`, not `localhost`.)
+Expected: a `docker-compose.yml` (plus any `.env`) describing db (pgvector), importer, and web — **no ollama service** — with the right dependencies, volumes, and environment. On Linux hosts, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the importer/web services if the generator doesn't. Review it; commit the generated file so users who only want `docker compose up` don't need the Aspire CLI.
 
 - [ ] **Step 4: Ensure the importer's data is mountable in Compose**
 
 The importer container needs the OSIS/dictionary XML. In `AppHost.cs`, bind-mount `./data` into the importer (`.WithBindMount("./data", "/data")`) so the generated Compose mounts it; document that users drop the three XML files into `./data` before `docker compose up`.
 
-- [ ] **Step 5: `README.md`** — sections: what it is; prerequisites (Docker only for end users; .NET 10 + Aspire CLI for developers); download links for openscriptures `kjv.xml`, `strongshebrew.xml`, `strongsgreek.xml` (public-domain note) and the instruction to place them in `./data`; **Quick start (Docker):** `docker compose up` (db + Ollama + auto model pull + importer seeds + web serves); **Developer start:** `aspire run --project src/StrongKingJames.AppHost`; architecture overview; contributing; license. No `ollama pull` step — the Ollama container pulls models itself.
+- [ ] **Step 5: `README.md`** — sections: what it is; prerequisites (Docker + host Ollama for end users; .NET 10 + Aspire CLI for developers); **host Ollama setup:** `ollama pull nomic-embed-text` and `ollama pull llama3.1` (with a note that Ollama must be listening on `0.0.0.0:11434` — set `OLLAMA_HOST=0.0.0.0` — so containers can reach it); download links for openscriptures `kjv.xml`, `strongshebrew.xml`, `strongsgreek.xml` (public-domain note) and the instruction to place them in `./data`; **Quick start (Docker):** `docker compose up` (db + importer seeds + web serves, all using the host's Ollama); **Developer start:** `aspire run --project src/StrongKingJames.AppHost`; architecture overview; contributing; license.
 
-- [ ] **Step 6: Verify the full Docker path**
+- [ ] **Step 6: Verify the full path**
 
-Run:
+With host Ollama running and models pulled:
 ```bash
 docker compose up --build
 ```
-Expected: all containers start; Ollama pulls models; importer seeds and exits; web is reachable (default `http://localhost:8080`). Browse/Search/Chat work end-to-end.
+Expected: db + importer + web containers start; importer reaches the host Ollama at `host.docker.internal:11434`, seeds and exits; web is reachable (default `http://localhost:8080`). Browse/Search/Chat work end-to-end.
 
 - [ ] **Step 7: `.github/workflows/ci.yml`** — on push/PR: setup .NET 10, `dotnet build`, then `dotnet test` for the **Core** and **Importer** test projects only (Data tests need Docker; note them as local-only, matching the spec).
 
@@ -2546,7 +2552,7 @@ git commit -m "chore: MIT license, README, docker-compose, and CI"
 Run: `dotnet test`
 Expected: all test projects PASS.
 
-- [ ] **Step 2: End-to-end smoke** — bring the whole stack up in Docker (`docker compose up --build`, or `aspire run` for the dev path). Confirm: Ollama pulls models, importer seeds and exits, web serves; then verify Browse (click word → popover), Search (`G2316`, `love`), Chat (streamed answer with citations).
+- [ ] **Step 2: End-to-end smoke** — with host Ollama running (models pulled), bring the stack up (`docker compose up --build`, or `aspire run` for the dev path). Confirm: importer reaches host Ollama, seeds and exits, web serves; then verify Browse (click word → popover), Search (`G2316`, `love`), Chat (streamed answer with citations).
 
 - [ ] **Step 3: Commit any fixes and tag**
 
@@ -2561,8 +2567,8 @@ git tag v0.1.0
 ## Notes for the implementer
 
 - **Placement decisions locked in this plan:** Ollama services (`OllamaOptions`, `OllamaEmbeddingService`, `OllamaChatService`) and `RagService` live in **Core** (they depend only on Core interfaces and framework HTTP/JSON), so both Web and Importer reuse them without circular references. `OllamaHealth` lives in Web (UI concern).
-- **Aspire is the orchestration source of truth.** The AppHost declares every resource; connection strings (`bible`) and the Ollama endpoint/model come from `WithReference` injection, not hardcoded config. `aspire run` is the dev entry point; `aspire publish` generates the committed `docker-compose.yml`. Confirm the CommunityToolkit Ollama integration's exact API (`AddOllama`/`AddModel`, the connection-string shape it emits) and the Docker Compose publisher's package/API name against the installed Aspire version — these move faster than the framework, so adjust names as needed while keeping the topology described here.
-- **Everything is containerized.** End users need only Docker (`docker compose up`); Ollama runs as a container and pulls its own models — there is no host `ollama pull` step. Developers additionally use the .NET 10 SDK and Aspire CLI.
+- **Aspire is the orchestration source of truth.** The AppHost declares every resource; the `bible` connection string comes from `WithReference` injection and the Ollama base URL from the `Ollama__BaseUrl` env var. `aspire run` is the dev entry point; `aspire publish` generates the committed `docker-compose.yml`. Confirm the Docker Compose publisher's package/API name against the installed Aspire version — it moves faster than the framework, so adjust names as needed while keeping the topology described here.
+- **Ollama runs on the host, not in Docker.** The user already has Ollama with models pulled. Containers reach it via `host.docker.internal:11434`; dev projects reach it via `localhost:11434`. PostgreSQL and the .NET services are the only containers. Ollama must listen on `0.0.0.0` (`OLLAMA_HOST=0.0.0.0`) for the containers to reach it.
 - **Real data may differ from fixtures.** Tasks 13–14 use small hand-written fixtures. Before the smoke run, open the real openscriptures files and confirm element/attribute names (milestone verses, `lemma` format, dictionary `xlit`/pronunciation attributes); adjust parser + fixtures together, keeping tests green.
 - **Embedding dimension** is fixed at 768 for `nomic-embed-text`. If a different embedding model is chosen, update `vector(768)` in the configuration/migration and the HNSW index.
 - **Follow TDD**: each logic task writes the failing test first. Parsers, detectors, prompt builder, citation extractor, repository, and search service are all covered.
