@@ -1,0 +1,21 @@
+@namespace StrongKingJames.Web.Components.Shared
+@inject OllamaHealth Health
+
+@if (_show && _message is not null)
+{
+    <div class="ollama-banner">
+        <span>⚠️ @_message</span>
+        <button type="button" @onclick="() => _show = false">Dismiss</button>
+    </div>
+}
+
+@code {
+    private bool _show = true;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (reachable, modelsReady, message) = await Health.CheckAsync();
+        if (!reachable || !modelsReady) _message = message ?? "Ollama is not available.";
+    }
+}

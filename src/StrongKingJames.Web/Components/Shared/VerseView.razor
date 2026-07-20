@@ -1,0 +1,24 @@
+@namespace StrongKingJames.Web.Components.Shared
+
+<span class="verse">
+    <sup class="verse-num">@Verse.VerseNumber</sup>
+    @foreach (var group in Verse.Words.GroupBy(w => w.Position).OrderBy(g => g.Key))
+    {
+        var word = group.First();
+        var strongs = group.Where(w => w.StrongsNumber != null).Select(w => w.StrongsNumber!).Distinct().ToList();
+        if (strongs.Count > 0)
+        {
+            <button type="button" class="tagged-word" @onclick="() => OnWordClicked.InvokeAsync(strongs)">@word.WordText</button>
+        }
+        else
+        {
+            @word.WordText
+        }
+        @(" ")
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public Verse Verse { get; set; } = null!;
+    [Parameter] public EventCallback<List<string>> OnWordClicked { get; set; }
+}
