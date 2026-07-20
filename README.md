@@ -18,11 +18,7 @@ chat. No cloud services, no API keys, no data leaving your computer.
 - 100% local and offline-capable (once models and data are downloaded) — nothing is sent to the cloud.
 - One-command Docker startup, or a rich developer experience via .NET Aspire.
 
-## Screenshots
 
-_Add screenshots here._
-
-<!-- e.g. ![Reader view](docs/screenshots/reader.png) -->
 
 ## Prerequisites
 
