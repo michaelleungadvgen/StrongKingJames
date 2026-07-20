@@ -25,7 +25,10 @@ public class OllamaChatService(HttpClient http, OllamaOptions options) : IChatSe
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         resp.EnsureSuccessStatusCode();
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var reader = new StreamReader(stream);
+        using var reader = new StreamReader(stream, leaveOpen: true);
+        // Null-sentinel loop rather than `while (!reader.EndOfStream)`: CA2024 forbids
+        // EndOfStream in async methods (it blocks). Ollama streams NDJSON, one JSON object
+        // per line; the final line is {"done":true} with no message.content, so it's skipped.
         while (true)
         {
             var line = await reader.ReadLineAsync(ct);
