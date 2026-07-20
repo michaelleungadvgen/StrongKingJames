@@ -22,11 +22,15 @@ public class OsisParserTests
     }
 
     [Fact]
-    public void Parse_captures_strongs_tagged_words()
+    public void Parse_captures_strongs_tagged_words_with_normalized_numbers()
     {
         var v = new OsisParser().Parse(FixturePath).Single();
-        Assert.Contains(v.Words, w => w.StrongsNumber == "H0430" && w.WordText.Contains("God"));
-        Assert.Contains(v.Words, w => w.StrongsNumber == "H07225");
+        // Source is zero-padded (strong:H0430, strong:H07225); stored values are normalized
+        // to <Letter><integer-without-leading-zeros> so they join to the dictionary entries.
+        Assert.Contains(v.Words, w => w.StrongsNumber == "H430" && w.WordText.Contains("God"));
+        Assert.Contains(v.Words, w => w.StrongsNumber == "H7225");
+        Assert.DoesNotContain(v.Words, w => w.StrongsNumber == "H0430");
+        Assert.DoesNotContain(v.Words, w => w.StrongsNumber == "H07225");
     }
 
     [Fact]
@@ -34,6 +38,26 @@ public class OsisParserTests
     {
         var v = new OsisParser().Parse(FixturePath).Single();
         Assert.Contains(v.Words, w => w.StrongsNumber == null);
+    }
+
+    [Fact]
+    public void Parse_excludes_note_text_from_verse()
+    {
+        var v = new OsisParser().Parse(FixturePath).Single();
+        // <note> content must never leak into the verse text or become clickable words.
+        Assert.DoesNotContain("NOTEWORD", v.Text);
+        Assert.DoesNotContain("tender grass", v.Text);
+        Assert.DoesNotContain(v.Words, w => w.WordText.Contains("NOTEWORD"));
+    }
+
+    [Fact]
+    public void Parse_skips_empty_word_anchors()
+    {
+        var v = new OsisParser().Parse(FixturePath).Single();
+        // The empty self-closing <w lemma="strong:H0001"/> anchor must produce no word.
+        Assert.DoesNotContain(v.Words, w => w.StrongsNumber == "H1");
+        Assert.DoesNotContain(v.Words, w => w.StrongsNumber == "H0001");
+        Assert.DoesNotContain(v.Words, w => string.IsNullOrWhiteSpace(w.WordText));
     }
 
     [Fact]

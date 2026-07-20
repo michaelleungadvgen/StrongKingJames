@@ -42,7 +42,7 @@ public static class ApiEndpoints
                 return Results.BadRequest("Question is required.");
             ctx.Response.Headers.ContentType = "text/event-stream";
             ctx.Response.Headers.CacheControl = "no-cache";
-            await foreach (var chunk in rag.AnswerAsync(body.Question, ctx.RequestAborted))
+            await foreach (var chunk in rag.AnswerAsync(body.Question, body.Model, ct: ctx.RequestAborted))
             {
                 // Keep multi-line content valid: a newline in a chunk starts a new SSE data line within the same event.
                 await ctx.Response.WriteAsync($"data: {chunk.Replace("\n", "\ndata: ")}\n\n", ctx.RequestAborted);
@@ -52,5 +52,5 @@ public static class ApiEndpoints
         });
     }
 
-    public record ChatRequest(string Question);
+    public record ChatRequest(string Question, string? Model = null);
 }

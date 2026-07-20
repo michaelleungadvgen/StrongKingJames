@@ -26,7 +26,7 @@ public class OsisParserMultiStrongTests
         var v = new OsisParser().Parse(FixturePath).Single();
         var godWords = v.Words.Where(w => w.WordText == "God" && w.StrongsNumber != null).ToList();
         var god = Assert.Single(godWords);
-        Assert.Equal("H0430", god.StrongsNumber);
+        Assert.Equal("H430", god.StrongsNumber);
         Assert.DoesNotContain(v.Words, w => w.StrongsNumber == "lemma.TH:0247");
         Assert.DoesNotContain(v.Words, w => w.StrongsNumber != null && w.StrongsNumber.Contains("0247"));
     }

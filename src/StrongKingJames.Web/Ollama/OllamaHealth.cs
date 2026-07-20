@@ -27,6 +27,22 @@ public class OllamaHealth(HttpClient http, OllamaOptions options)
         }
     }
 
+    /// <summary>Returns the names of models installed on the Ollama host (empty if unreachable).</summary>
+    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await http.GetAsync($"{options.BaseUrl}/api/tags", ct);
+            if (!resp.IsSuccessStatusCode) return [];
+            var tags = await resp.Content.ReadFromJsonAsync<TagsResponse>(ct);
+            return tags?.Models?.Select(m => m.Name).OrderBy(n => n).ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     private record TagsResponse(List<ModelInfo>? Models);
     private record ModelInfo(string Name);
 }

@@ -35,9 +35,13 @@ public class OsisParser
             }
             else if (current is not null && node is XElement w && w.Name == Osis + "w")
             {
+                var text = w.Value;
+                // NT anchor <w .../> elements are empty (self-closing, no text). An empty clickable
+                // word is wrong: skip it entirely (no position bump, no VerseWord).
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
                 var lemma = w.Attribute("lemma")?.Value ?? "";
                 var numbers = ExtractStrongs(lemma);
-                var text = w.Value;
                 textBuffer.Append(text).Append(' ');
                 position++;
                 if (numbers.Count == 0)
@@ -59,12 +63,17 @@ public class OsisParser
     }
 
     // Yields elements and the text nodes that are NOT inside a <w> element, in document order.
+    // <note> (study notes, thousands of them) and <title> (book/chapter/Psalm titles) are NOT
+    // verse content: skip them AND their descendants so their text never pollutes the verse.
     private static IEnumerable<XNode> Descendants(XElement root)
     {
         foreach (var node in root.Nodes())
         {
             if (node is XElement el)
             {
+                if (el.Name == Osis + "note" || el.Name == Osis + "title")
+                    continue; // drop the element and do not recurse into it
+
                 yield return el;
                 if (el.Name != Osis + "w")
                     foreach (var child in Descendants(el))
@@ -92,7 +101,8 @@ public class OsisParser
     private static List<string> ExtractStrongs(string lemma) =>
         lemma.Split(' ', StringSplitOptions.RemoveEmptyEntries)
              .Where(p => p.StartsWith("strong:"))
-             .Select(p => p["strong:".Length..])
+             .Select(p => StrongsNumber.Normalize(p["strong:".Length..]))
+             .Where(n => n.Length > 0)
              .ToList();
 
     private static string NormalizeWhitespace(string s) =>

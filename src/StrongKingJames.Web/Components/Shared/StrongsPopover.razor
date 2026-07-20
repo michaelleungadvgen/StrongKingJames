@@ -1,10 +1,11 @@
 @namespace StrongKingJames.Web.Components.Shared
 @inject IBibleRepository Repo
+@inject IChatService Chat
 
 @if (Numbers.Count > 0)
 {
     <div class="strongs-panel-backdrop open" @onclick="OnClose"></div>
-    <aside class="strongs-panel open">
+    <aside class="strongs-panel open" @onclick:stopPropagation="true">
         <div class="strongs-panel-header">
             <strong>Strong's Concordance</strong>
             <button type="button" class="strongs-close" @onclick="OnClose" aria-label="Close">×</button>
@@ -40,8 +41,21 @@
                             <dt>KJV Usage</dt>
                             <dd>@entry.KjvUsage</dd>
                         </dl>
+
+                        <div class="strongs-actions">
+                            <button type="button" class="explain-btn"
+                                    @onclick="() => ExplainAsync(entry)"
+                                    disabled="@_explainingNumbers.Contains(entry.Number)">
+                                @(_explainingNumbers.Contains(entry.Number) ? "Explaining…" : "✨ Explain with AI")
+                            </button>
+                            <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
+                        </div>
+
+                        @if (_explanations.TryGetValue(entry.Number, out var explanation) && !string.IsNullOrEmpty(explanation))
+                        {
+                            <div class="strongs-explanation">@explanation</div>
+                        }
                     }
-                    <a class="strongs-uses" href="@($"/search?q={number}")">See all uses</a>
                 </div>
             }
         }
@@ -56,12 +70,17 @@
     private string _loadedKey = "";
     private bool _loading;
 
+    private readonly Dictionary<string, string> _explanations = new();
+    private readonly HashSet<string> _explainingNumbers = new();
+
     protected override async Task OnParametersSetAsync()
     {
         var key = string.Join(",", Numbers);
         if (key == _loadedKey) return;
         _loadedKey = key;
         _loading = true;
+        _explanations.Clear();
+        _explainingNumbers.Clear();
         var entries = new List<StrongsEntry>();
         foreach (var number in Numbers)
         {
@@ -70,5 +89,30 @@
         }
         _entries = entries;
         _loading = false;
+    }
+
+    private async Task ExplainAsync(StrongsEntry entry)
+    {
+        if (_explainingNumbers.Contains(entry.Number)) return;
+        _explainingNumbers.Add(entry.Number);
+        _explanations[entry.Number] = "";
+        try
+        {
+            var messages = StrongKingJames.Core.Rag.StrongsExplainPromptBuilder.Build(entry);
+            await foreach (var chunk in Chat.StreamAsync(messages))
+            {
+                _explanations[entry.Number] += chunk;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            _explanations[entry.Number] = $"Could not generate an explanation: {ex.Message}. Is Ollama running?";
+        }
+        finally
+        {
+            _explainingNumbers.Remove(entry.Number);
+            await InvokeAsync(StateHasChanged);
+        }
     }
 }

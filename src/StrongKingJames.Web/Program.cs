@@ -22,9 +22,22 @@ builder.Services.AddBibleData(bibleConn);
 
 var ollama = builder.Configuration.GetSection("Ollama").Get<OllamaOptions>() ?? new();
 builder.Services.AddSingleton(ollama);
-builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
-builder.Services.AddHttpClient<IChatService, OllamaChatService>();
-builder.Services.AddHttpClient<OllamaHealth>();
+
+// The Ollama clients talk to a local LLM: responses (especially streaming chat) routinely
+// take far longer than the 10s default of the standard resilience handler that
+// AddServiceDefaults applies to every HttpClient — which otherwise aborts them with a
+// Polly TimeoutRejectedException. Remove that resilience handler for these clients and use
+// a long/no timeout. Resilience retries also buffer responses, which would break streaming.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental but stable enough for our use
+builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>()
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromMinutes(5))
+    .RemoveAllResilienceHandlers();
+builder.Services.AddHttpClient<IChatService, OllamaChatService>()
+    .ConfigureHttpClient(c => c.Timeout = Timeout.InfiniteTimeSpan)
+    .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+builder.Services.AddHttpClient<OllamaHealth>()
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<IRagService, RagService>();
 
 var app = builder.Build();

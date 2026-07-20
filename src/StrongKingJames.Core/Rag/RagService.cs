@@ -14,7 +14,10 @@ public class RagService(
     private const int NeighborRadius = 2;
 
     public async IAsyncEnumerable<string> AnswerAsync(
-        string question, [EnumeratorCancellation] CancellationToken ct = default)
+        string question,
+        string? model = null,
+        IReadOnlyList<ChatMessage>? history = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var qvec = await embedder.EmbedAsync(question, ct);
         var hits = await search.SemanticSearchAsync(qvec, TopK, ct);
@@ -29,8 +32,8 @@ public class RagService(
             passages.Add(new RetrievedPassage(hit.Reference, text, hit.Score ?? 0));
         }
 
-        var messages = RagPromptBuilder.Build(question, passages);
-        await foreach (var chunk in chat.StreamAsync(messages, ct))
+        var messages = RagPromptBuilder.Build(question, passages, history);
+        await foreach (var chunk in chat.StreamAsync(messages, model, ct))
             yield return chunk;
     }
 }

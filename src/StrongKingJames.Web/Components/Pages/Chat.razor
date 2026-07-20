@@ -1,6 +1,7 @@
 @page "/chat"
 @rendermode InteractiveServer
 @inject IRagService Rag
+@inject IJSRuntime JS
 
 <PageTitle>Chat - StrongKingJames</PageTitle>
 
@@ -10,55 +11,102 @@
 
 <div class="chat-card">
     <div class="chat-history" id="chat-history">
-        @if (_messages.Count == 0)
+        @if (_messages.Count == 0 && !_isStreaming)
         {
-            <div class="muted" style="text-align: center; padding: 2rem 0;">
-                Ask a question and the answer will be grounded in Scripture with verse citations.
+            <div class="chat-empty">
+                <div class="chat-empty-icon">✝</div>
+                <h2>Ask the Bible anything</h2>
+                <p>Every answer is grounded in Scripture and includes verse citations.</p>
+                <div class="chat-suggestions">
+                    @foreach (var q in _suggestions)
+                    {
+                        <button type="button" class="chat-suggestion" @onclick="() => AskAsync(q)">@q</button>
+                    }
+                </div>
             </div>
         }
-        else
+
+        @foreach (var msg in _messages)
         {
-            @foreach (var msg in _messages)
-            {
-                <div class="chat-message @(msg.IsUser ? "user" : "assistant")">
-                    <span class="chat-sender">@(msg.IsUser ? "You" : "StrongKingJames")</span>
-                    <div class="chat-bubble">@msg.Text</div>
+            <div class="chat-message @(msg.IsUser ? "user" : "assistant")">
+                <div class="chat-avatar" aria-hidden="true">@(msg.IsUser ? "👤" : "📖")</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-name">@(msg.IsUser ? "You" : "StrongKingJames")</span>
+                    </div>
+                    <div class="chat-bubble">
+                        @if (string.IsNullOrEmpty(msg.Text) && !msg.IsUser)
+                        {
+                            <span class="chat-thinking">Thinking</span>
+                        }
+                        else
+                        {
+                            @msg.Text
+                        }
+                    </div>
                     @if (!msg.IsUser && msg.Citations.Count > 0)
                     {
-                        <div class="citations">
-                            <strong>Scripture citations</strong>
-                            <ul>
-                                @foreach (var c in msg.Citations)
-                                {
-                                    <li><a href="@CitationLink(c)">@c</a></li>
-                                }
-                            </ul>
+                        <div class="chat-citations">
+                            @foreach (var c in msg.Citations)
+                            {
+                                <a class="chat-citation" href="@CitationLink(c)">@c</a>
+                            }
                         </div>
                     }
                 </div>
-            }
+            </div>
+        }
+
+        @if (_isStreaming && _messages.LastOrDefault() is { IsUser: false } last && !string.IsNullOrEmpty(last.Text))
+        {
+            <div class="chat-message assistant">
+                <div class="chat-avatar" aria-hidden="true">📖</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-name">StrongKingJames</span>
+                    </div>
+                    <div class="chat-bubble typing">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                    </div>
+                </div>
+            </div>
         }
     </div>
 
     <div class="chat-input-row">
-        <textarea @bind="_question" @bind:event="oninput" rows="3" placeholder="Ask a question..." disabled="@_busy"></textarea>
-        <button type="button" class="btn-primary" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">Ask</button>
+        <textarea @bind="_question" @bind:event="oninput" rows="2" placeholder="Ask a question..." disabled="@_busy"></textarea>
+        <button type="button" class="btn-primary" @onclick="() => AskAsync()" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">
+            Send
+        </button>
     </div>
 </div>
 
 @code {
     private string _question = "";
     private bool _busy;
+    private bool _isStreaming;
     private List<ChatMessage> _messages = [];
 
-    private async Task AskAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_question)) return;
+    private readonly string[] _suggestions =
+    [
+        "What does the Bible say about love?",
+        "Explain John 3:16",
+        "How can I find peace?",
+        "What is faith?"
+    ];
 
-        var question = _question.Trim();
+    private async Task AskAsync(string? suggestedQuestion = null)
+    {
+        var question = (suggestedQuestion ?? _question).Trim();
+        if (string.IsNullOrWhiteSpace(question)) return;
+
         _messages.Add(new ChatMessage { Text = question, IsUser = true });
         _question = "";
         _busy = true;
+        _isStreaming = true;
+        await ScrollToBottomAsync();
 
         var answer = new ChatMessage { Text = "", IsUser = false };
         _messages.Add(answer);
@@ -69,6 +117,7 @@
             {
                 answer.Text += chunk;
                 await InvokeAsync(StateHasChanged);
+                await ScrollToBottomAsync();
             }
             answer.Citations = CitationExtractor.Extract(answer.Text).ToList();
         }
@@ -78,7 +127,22 @@
         }
         finally
         {
+            _isStreaming = false;
             _busy = false;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottomAsync();
+        }
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", "chat-history");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Page may be disconnecting; ignore.
         }
     }
 

@@ -3,9 +3,7 @@
   <osisText osisIDWork="KJV">
     <div type="book" osisID="Gen">
       <chapter osisID="Gen.1">
-        <verse osisID="Gen.1.1" sID="Gen.1.1"/>
-        In <w lemma="strong:H07225">the beginning</w> <w lemma="strong:H0430">God</w> created.
-        <verse eID="Gen.1.1"/>
+        <verse osisID="Gen.1.1" sID="Gen.1.1"/><w lemma="strong:H07225">In the beginning</w> <w lemma="strong:H0430">God</w> <w lemma="strong:H0001"/> created<note type="study">NOTEWORD grass: Heb. tender grass</note>.<verse eID="Gen.1.1"/>
       </chapter>
     </div>
   </osisText>

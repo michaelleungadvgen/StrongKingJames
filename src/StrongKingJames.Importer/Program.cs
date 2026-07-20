@@ -20,7 +20,13 @@ try
 
     builder.Services.AddBibleData(options.ConnectionString);
     builder.Services.AddSingleton(new OllamaOptions { BaseUrl = options.OllamaBaseUrl, EmbeddingModel = options.EmbeddingModel });
-    builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
+    // Long timeout + no standard resilience handler: the first embedding call can block while
+    // Ollama loads the model, which exceeds the 10s default from AddServiceDefaults.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental but stable enough for our use
+    builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>()
+        .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromMinutes(5))
+        .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
 
     using var host = builder.Build();
     using var scope = host.Services.CreateScope();
@@ -70,9 +76,13 @@ try
         Console.WriteLine($"WARNING: expected 66 books but found {bookCount} — import may be incomplete.");
     if (verseCount != 31102)
         Console.WriteLine($"WARNING: expected 31102 KJV verses but found {verseCount} — import may be incomplete (check the source files).");
+    if (strongsCount == 0)
+        Console.WriteLine("WARNING: 0 Strong's entries — the lexicon(s) did not parse. Check the dictionary source files.");
+    else if (strongsCount < 13000)
+        Console.WriteLine($"WARNING: only {strongsCount} Strong's entries (expected ~14298: ~8674 Hebrew + ~5624 Greek) — a lexicon may be missing or truncated.");
     if (taggedWordCount == 0)
-        Console.WriteLine("WARNING: 0 tagged words — the Bible source has no Strong's numbers. " +
-                          "Use a Strong's-tagged source (e.g. 1John419/kjs JSON via --format kjs).");
+        Console.WriteLine("WARNING: no Strong's tags parsed — check the OSIS source. " +
+                          "(For a non-tagged Bible source use a Strong's-tagged one, e.g. 1John419/kjs JSON via --format kjs.)");
 }
 catch (Exception ex)
 {
