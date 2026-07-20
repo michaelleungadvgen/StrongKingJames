@@ -3,6 +3,7 @@ using StrongKingJames.Core.Rag;
 using StrongKingJames.Core.Services;
 using StrongKingJames.Data;
 using StrongKingJames.Web.Components;
+using StrongKingJames.Web.Endpoints;
 using StrongKingJames.Web.Ollama;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,6 +38,7 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapApiEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
