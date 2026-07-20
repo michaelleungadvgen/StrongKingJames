@@ -2,6 +2,7 @@
 @page "/browse/{Book}/{Chapter:int}"
 @rendermode InteractiveServer
 @inject IBibleRepository Repo
+@inject NavigationManager Nav
 
 <PageTitle>Browse - StrongKingJames</PageTitle>
 
@@ -27,7 +28,11 @@
     <button type="button" @onclick="NextChapter">Next</button>
 </div>
 
-@if (_loading)
+@if (_bookError is not null)
+{
+    <p class="muted">@_bookError</p>
+}
+else if (_loading)
 {
     <p class="muted">Loading...</p>
 }
@@ -63,6 +68,7 @@ else
     private bool _loading;
     private IReadOnlyList<string>? _selectedStrongs;
     private string? _appliedRouteKey;
+    private string? _bookError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -73,69 +79,68 @@ else
     {
         if (_books.Count == 0) return;
 
-        // Apply route parameters (from citation links / direct URLs) once per unique route.
-        if (Book is not null)
+        if (Book is null)
         {
-            var routeKey = $"{Book}/{Chapter}";
-            if (routeKey != _appliedRouteKey)
+            // Default landing ("/"): navigate to the first book / chapter 1 so all
+            // browsing flows through a single URL-driven load path.
+            if (_selectedAbbrev.Length == 0)
             {
-                _appliedRouteKey = routeKey;
-                var resolved = ResolveBook(Book);
-                if (resolved is not null)
-                {
-                    _selectedAbbrev = resolved.Abbreviation;
-                    _selectedName = resolved.Name;
-                    _chapter = Chapter > 0 ? Chapter : 1;
-                    await LoadChapterAsync();
-                }
-                return;
+                Nav.NavigateTo($"/browse/{Uri.EscapeDataString(_books[0].Abbreviation)}/1");
             }
+            return;
         }
-        else if (_selectedAbbrev.Length == 0)
+
+        // Apply route parameters (from pickers, citation links, or direct URLs)
+        // once per unique route. The URL is the single source of truth.
+        var routeKey = $"{Book}/{Chapter}";
+        if (routeKey == _appliedRouteKey) return;
+        _appliedRouteKey = routeKey;
+
+        var resolved = ResolveBook(Book);
+        if (resolved is null)
         {
-            // Default landing (/) selection: first book, chapter 1.
-            var first = _books[0];
-            _selectedAbbrev = first.Abbreviation;
-            _selectedName = first.Name;
-            _chapter = 1;
-            await LoadChapterAsync();
+            _bookError = $"Unknown book '{Book}'.";
+            _verses = [];
+            _selectedStrongs = null;
+            _selectedAbbrev = "";
+            return;
         }
+
+        _bookError = null;
+        _selectedAbbrev = resolved.Abbreviation;
+        _selectedName = resolved.Name;
+        _chapter = Chapter > 0 ? Chapter : 1;
+        await LoadChapterAsync();
     }
 
     private Book? ResolveBook(string value) => _books.FirstOrDefault(b =>
         b.Abbreviation.Equals(value, StringComparison.OrdinalIgnoreCase) ||
         b.Name.Equals(value, StringComparison.OrdinalIgnoreCase));
 
-    private async Task OnBookChanged(ChangeEventArgs e)
+    private void OnBookChanged(ChangeEventArgs e)
     {
-        _selectedAbbrev = e.Value?.ToString() ?? "";
-        _selectedName = _books.FirstOrDefault(b => b.Abbreviation == _selectedAbbrev)?.Name ?? _selectedAbbrev;
-        _chapter = 1;
-        await LoadChapterAsync();
+        var abbrev = e.Value?.ToString() ?? "";
+        if (abbrev.Length == 0) return;
+        NavigateTo(abbrev, 1);
     }
 
-    private async Task OnChapterChanged(ChangeEventArgs e)
+    private void OnChapterChanged(ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var c) && c >= 1)
+        if (int.TryParse(e.Value?.ToString(), out var c))
         {
-            _chapter = c;
-            await LoadChapterAsync();
+            NavigateTo(_selectedAbbrev, c);
         }
     }
 
-    private async Task PrevChapter()
-    {
-        if (_chapter > 1)
-        {
-            _chapter--;
-            await LoadChapterAsync();
-        }
-    }
+    private void PrevChapter() => NavigateTo(_selectedAbbrev, _chapter - 1);
 
-    private async Task NextChapter()
+    private void NextChapter() => NavigateTo(_selectedAbbrev, _chapter + 1);
+
+    private void NavigateTo(string abbrev, int chapter)
     {
-        _chapter++;
-        await LoadChapterAsync();
+        if (abbrev.Length == 0) return;
+        if (chapter < 1) chapter = 1;
+        Nav.NavigateTo($"/browse/{Uri.EscapeDataString(abbrev)}/{chapter}");
     }
 
     private async Task LoadChapterAsync()
