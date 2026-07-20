@@ -1,0 +1,151 @@
+@page "/"
+@page "/browse/{Book}/{Chapter:int}"
+@rendermode InteractiveServer
+@inject IBibleRepository Repo
+
+<PageTitle>Browse - StrongKingJames</PageTitle>
+
+<h1>Browse</h1>
+
+<OllamaStatusBanner />
+
+<div class="controls">
+    <label>
+        Book
+        <select value="@_selectedAbbrev" @onchange="OnBookChanged">
+            @foreach (var b in _books)
+            {
+                <option value="@b.Abbreviation">@b.Name</option>
+            }
+        </select>
+    </label>
+    <label>
+        Chapter
+        <input type="number" min="1" value="@_chapter" @onchange="OnChapterChanged" style="width: 5rem;" />
+    </label>
+    <button type="button" @onclick="PrevChapter" disabled="@(_chapter <= 1)">Prev</button>
+    <button type="button" @onclick="NextChapter">Next</button>
+</div>
+
+@if (_loading)
+{
+    <p class="muted">Loading...</p>
+}
+else if (_verses.Count == 0)
+{
+    <p class="muted">No verses — has the Bible been imported?</p>
+}
+else
+{
+    <div class="chapter-text">
+        <h2>@_selectedName @_chapter</h2>
+        @foreach (var v in _verses)
+        {
+            <VerseView Verse="v" OnWordClicked="ShowStrongs" />
+        }
+    </div>
+}
+
+@if (_selectedStrongs is not null)
+{
+    <StrongsPopover Numbers="_selectedStrongs" OnClose="() => _selectedStrongs = null" />
+}
+
+@code {
+    [Parameter] public string? Book { get; set; }
+    [Parameter] public int Chapter { get; set; }
+
+    private IReadOnlyList<Book> _books = [];
+    private IReadOnlyList<Verse> _verses = [];
+    private string _selectedAbbrev = "";
+    private string _selectedName = "";
+    private int _chapter = 1;
+    private bool _loading;
+    private IReadOnlyList<string>? _selectedStrongs;
+    private string? _appliedRouteKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _books = await Repo.GetBooksAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_books.Count == 0) return;
+
+        // Apply route parameters (from citation links / direct URLs) once per unique route.
+        if (Book is not null)
+        {
+            var routeKey = $"{Book}/{Chapter}";
+            if (routeKey != _appliedRouteKey)
+            {
+                _appliedRouteKey = routeKey;
+                var resolved = ResolveBook(Book);
+                if (resolved is not null)
+                {
+                    _selectedAbbrev = resolved.Abbreviation;
+                    _selectedName = resolved.Name;
+                    _chapter = Chapter > 0 ? Chapter : 1;
+                    await LoadChapterAsync();
+                }
+                return;
+            }
+        }
+        else if (_selectedAbbrev.Length == 0)
+        {
+            // Default landing (/) selection: first book, chapter 1.
+            var first = _books[0];
+            _selectedAbbrev = first.Abbreviation;
+            _selectedName = first.Name;
+            _chapter = 1;
+            await LoadChapterAsync();
+        }
+    }
+
+    private Book? ResolveBook(string value) => _books.FirstOrDefault(b =>
+        b.Abbreviation.Equals(value, StringComparison.OrdinalIgnoreCase) ||
+        b.Name.Equals(value, StringComparison.OrdinalIgnoreCase));
+
+    private async Task OnBookChanged(ChangeEventArgs e)
+    {
+        _selectedAbbrev = e.Value?.ToString() ?? "";
+        _selectedName = _books.FirstOrDefault(b => b.Abbreviation == _selectedAbbrev)?.Name ?? _selectedAbbrev;
+        _chapter = 1;
+        await LoadChapterAsync();
+    }
+
+    private async Task OnChapterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var c) && c >= 1)
+        {
+            _chapter = c;
+            await LoadChapterAsync();
+        }
+    }
+
+    private async Task PrevChapter()
+    {
+        if (_chapter > 1)
+        {
+            _chapter--;
+            await LoadChapterAsync();
+        }
+    }
+
+    private async Task NextChapter()
+    {
+        _chapter++;
+        await LoadChapterAsync();
+    }
+
+    private async Task LoadChapterAsync()
+    {
+        if (_selectedAbbrev.Length == 0) return;
+        _loading = true;
+        _selectedStrongs = null;
+        _verses = await Repo.GetChapterAsync(_selectedAbbrev, _chapter);
+        _loading = false;
+    }
+
+    private void ShowStrongs(List<string> numbers) => _selectedStrongs = numbers;
+}
