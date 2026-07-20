@@ -16,6 +16,7 @@ public class StrongsDictionaryParserTests
         Assert.Equal("H0430", entry.Number);
         Assert.Equal("אֱלֹהִים", entry.Lemma);
         Assert.Equal("ʼĕlôhîym", entry.Transliteration);
+        Assert.Equal("n-m", entry.Pronunciation);
         Assert.Contains("supreme God", entry.Definition);
         Assert.Contains("judges", entry.KjvUsage);
     }
