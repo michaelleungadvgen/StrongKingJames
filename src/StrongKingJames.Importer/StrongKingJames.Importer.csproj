@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\StrongKingJames.Core\StrongKingJames.Core.csproj" />
     <ProjectReference Include="..\StrongKingJames.Data\StrongKingJames.Data.csproj" />
+    <ProjectReference Include="..\StrongKingJames.ServiceDefaults\StrongKingJames.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/StrongKingJames.AppHost/StrongKingJames.AppHost.csproj" />
     <Project Path="src/StrongKingJames.Core/StrongKingJames.Core.csproj" />
     <Project Path="src/StrongKingJames.Data/StrongKingJames.Data.csproj" />
     <Project Path="src/StrongKingJames.Importer/StrongKingJames.Importer.csproj" />
+    <Project Path="src/StrongKingJames.ServiceDefaults/StrongKingJames.ServiceDefaults.csproj" />
     <Project Path="src/StrongKingJames.Web/StrongKingJames.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
