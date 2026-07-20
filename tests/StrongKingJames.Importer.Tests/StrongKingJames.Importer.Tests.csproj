@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="TestData\**\*.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\StrongKingJames.Importer\StrongKingJames.Importer.csproj" />
     <ProjectReference Include="..\..\src\StrongKingJames.Core\StrongKingJames.Core.csproj" />
   </ItemGroup>
