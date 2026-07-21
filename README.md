@@ -15,6 +15,7 @@ chat. No cloud services, no API keys, no data leaving your computer.
 - Strong's-number search: find every verse that uses a given Strong's number.
 - Semantic search: find verses by meaning using pgvector embeddings, not just keywords.
 - Local RAG chat assistant: ask a question and get a streamed answer grounded in Scripture, with citations.
+- Personal notes on books, characters, or verses — embedded so Chat and Search can optionally pull them in as context (can be turned off; see [Configuration](#configuration)).
 - 100% local and offline-capable (once models and data are downloaded) — nothing is sent to the cloud.
 - One-command Docker startup, or a rich developer experience via .NET Aspire.
 
@@ -224,6 +225,50 @@ section of `appsettings.json`.
 3. Expand each hit with its neighboring verses for surrounding context.
 4. Build a prompt from the retrieved passages and send it to Ollama's chat model (`llama3.1:8b`).
 5. Stream the answer back to the browser with verse citations.
+
+## Configuration
+
+Runtime settings live in `src/StrongKingJames.Web/appsettings.json` and can be overridden with
+environment variables (using `__` as the section separator, e.g. `Features__NotesEnabled=false`).
+
+### Feature flags
+
+The `Features` section toggles optional features:
+
+```json
+{
+  "Features": {
+    "NotesEnabled": true
+  }
+}
+```
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `Features:NotesEnabled` | `true` | When `false`, the **Notes** feature is turned off: the Notes nav link and page form are hidden, the inline "＋ Add note" button on the Browse page is removed, and the "Use my notes" / "Search my notes too" options in Chat and Search disappear. Existing notes remain in the database but are not used. |
+
+**To turn the Notes / add-note feature off**, set it to `false` in `appsettings.json`:
+
+```json
+{
+  "Features": {
+    "NotesEnabled": false
+  }
+}
+```
+
+or via environment variable (e.g. in the Docker Compose `web` service or when running the app):
+
+```bash
+Features__NotesEnabled=false
+```
+
+Restart the web app for the change to take effect.
+
+### Ollama models
+
+Model names are set in the `Ollama` section of `appsettings.json` (`EmbeddingModel`,
+`ChatModel`); the base URL comes from the `Ollama__BaseUrl` environment variable (Aspire injects it).
 
 ## Running tests
 

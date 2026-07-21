@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IBibleRepository Repo
 @inject NoteService NoteSvc
+@inject FeatureOptions Features
 @inject NavigationManager Nav
 
 <PageTitle>Browse - StrongKingJames</PageTitle>
@@ -48,12 +49,15 @@ else
     <article class="chapter-card">
         <header class="chapter-header">
             <h2>@_selectedName @_chapter</h2>
-            <button type="button" class="note-btn" @onclick="ToggleAddNote">
-                @(_addingNote ? "Cancel note" : "＋ Add note")
-            </button>
+            @if (Features.NotesEnabled)
+            {
+                <button type="button" class="note-btn" @onclick="ToggleAddNote">
+                    @(_addingNote ? "Cancel note" : "＋ Add note")
+                </button>
+            }
         </header>
 
-        @if (_addingNote)
+        @if (Features.NotesEnabled && _addingNote)
         {
             <div class="inline-note-form">
                 <div class="note-form-row">

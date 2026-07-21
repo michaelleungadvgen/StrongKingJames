@@ -42,6 +42,10 @@ builder.Services.AddHttpClient<OllamaHealth>()
 builder.Services.AddScoped<IRagService, RagService>();
 builder.Services.AddScoped<StrongKingJames.Core.Notes.NoteService>();
 
+// Feature toggles (e.g. Features:NotesEnabled).
+var features = builder.Configuration.GetSection("Features").Get<StrongKingJames.Web.Configuration.FeatureOptions>() ?? new();
+builder.Services.AddSingleton(features);
+
 // Serialize/accept enums (e.g. NoteType) as strings in the minimal-API JSON.
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));

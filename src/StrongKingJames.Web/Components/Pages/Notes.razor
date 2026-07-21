@@ -1,10 +1,19 @@
 @page "/notes"
 @rendermode InteractiveServer
 @inject NoteService NoteSvc
+@inject FeatureOptions Features
 
 <PageTitle>Notes - StrongKingJames</PageTitle>
 
 <h1>My Notes</h1>
+
+@if (!Features.NotesEnabled)
+{
+    <p class="muted">The Notes feature is turned off. Enable it by setting <code>Features:NotesEnabled</code> to <code>true</code> in configuration.</p>
+}
+else
+{
+
 <p class="muted">Notes are embedded and can be pulled into Chat and Search as personal context.</p>
 
 <OllamaStatusBanner />
@@ -80,12 +89,17 @@ else
     </div>
 }
 
+} @* end Features.NotesEnabled *@
+
 @code {
     private List<Note> _notes = [];
     private Note _editing = new();
     private bool _saving;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (Features.NotesEnabled) await LoadAsync();
+    }
 
     private async Task LoadAsync() => _notes = (await NoteSvc.GetAllAsync()).ToList();
 

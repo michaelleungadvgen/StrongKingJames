@@ -4,6 +4,7 @@
 @inject IJSRuntime JS
 @inject StrongKingJames.Web.Ollama.OllamaHealth Health
 @inject StrongKingJames.Core.Ollama.OllamaOptions OllamaOpts
+@inject FeatureOptions Features
 
 <PageTitle>Chat - StrongKingJames</PageTitle>
 
@@ -23,9 +24,12 @@
             <option value="@m">@m</option>
         }
     </select>
-    <label class="toolbar-check" title="Include your personal notes as context">
-        <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Use my notes
-    </label>
+    @if (Features.NotesEnabled)
+    {
+        <label class="toolbar-check" title="Include your personal notes as context">
+            <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Use my notes
+        </label>
+    }
     <button type="button" class="chat-clear" @onclick="ClearChat" disabled="@(_busy || _messages.Count == 0)">New chat</button>
 </div>
 

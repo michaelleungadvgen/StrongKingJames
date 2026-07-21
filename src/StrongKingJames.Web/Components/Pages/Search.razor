@@ -4,6 +4,7 @@
 @inject ISearchService SearchService
 @inject IEmbeddingService Embedder
 @inject NoteService NoteSvc
+@inject FeatureOptions Features
 @inject NavigationManager Nav
 
 <PageTitle>Search - StrongKingJames</PageTitle>
@@ -21,9 +22,12 @@
     <button type="button" class="btn-primary" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
 </div>
 
-<label class="toolbar-check search-notes-check" title="Also search your personal notes">
-    <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Search my notes too
-</label>
+@if (Features.NotesEnabled)
+{
+    <label class="toolbar-check search-notes-check" title="Also search your personal notes">
+        <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Search my notes too
+    </label>
+}
 
 @if (_mode is not null)
 {

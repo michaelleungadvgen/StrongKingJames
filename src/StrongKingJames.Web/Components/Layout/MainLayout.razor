@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject FeatureOptions Features
 
 <header class="app-header">
     <div class="app-header-inner">
@@ -10,7 +11,10 @@
             <NavLink href="/" Match="NavLinkMatch.All">Browse</NavLink>
             <NavLink href="/search">Search</NavLink>
             <NavLink href="/chat">Chat</NavLink>
-            <NavLink href="/notes">Notes</NavLink>
+            @if (Features.NotesEnabled)
+            {
+                <NavLink href="/notes">Notes</NavLink>
+            }
         </nav>
     </div>
 </header>
