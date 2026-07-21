@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using StrongKingJames.Core.Ollama;
 using StrongKingJames.Core.Rag;
 using StrongKingJames.Core.Services;
@@ -46,6 +47,15 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 var app = builder.Build();
+
+// Ensure the database schema is current (applies pending migrations such as the notes
+// tables). The web app self-migrates so it works against any database it points at, not
+// only ones the importer has already migrated.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<StrongKingJames.Data.BibleDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
