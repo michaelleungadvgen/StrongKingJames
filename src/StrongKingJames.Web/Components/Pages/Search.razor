@@ -3,6 +3,7 @@
 @inject IBibleRepository Repo
 @inject ISearchService SearchService
 @inject IEmbeddingService Embedder
+@inject NoteService NoteSvc
 @inject NavigationManager Nav
 
 <PageTitle>Search - StrongKingJames</PageTitle>
@@ -20,6 +21,10 @@
     <button type="button" class="btn-primary" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
 </div>
 
+<label class="toolbar-check search-notes-check" title="Also search your personal notes">
+    <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Search my notes too
+</label>
+
 @if (_mode is not null)
 {
     <span class="mode-indicator">Mode: @_mode</span>
@@ -35,8 +40,31 @@
     <p class="muted">@_message</p>
 }
 
+@if (_noteResults.Count > 0)
+{
+    <h2 class="results-heading">From your notes</h2>
+    <ul class="result-list note-results">
+        @foreach (var n in _noteResults)
+        {
+            <li>
+                @if (!string.IsNullOrWhiteSpace(n.Reference))
+                {
+                    <a href="@NoteRefLink(n)">@n.Reference</a>
+                }
+                <span class="note-badge note-badge-@n.Type.ToString().ToLowerInvariant()">@n.Type</span>
+                <span class="score">score @n.Score.ToString("F3")</span>
+                <span class="result-text"><strong>@n.Title</strong> — @n.Body</span>
+            </li>
+        }
+    </ul>
+}
+
 @if (_results.Count > 0)
 {
+    @if (_noteResults.Count > 0)
+    {
+        <h2 class="results-heading">From Scripture</h2>
+    }
     <ul class="result-list">
         @foreach (var r in _results)
         {
@@ -58,8 +86,10 @@
     private string _query = "";
     private SearchMode? _mode;
     private IReadOnlyList<SearchResult> _results = [];
+    private IReadOnlyList<NoteSearchResult> _noteResults = [];
     private string? _message;
     private bool _busy;
+    private bool _includeNotes;
     private bool _showOllamaBanner;
     private bool _autoRan;
 
@@ -89,11 +119,20 @@
         _busy = true;
         _message = null;
         _results = [];
+        _noteResults = [];
         _showOllamaBanner = false;
         _mode = SearchModeDetector.Detect(query);
 
         try
         {
+            // Optionally search personal notes (semantic) alongside scripture — not for
+            // reference lookups, which navigate away.
+            if (_includeNotes && _mode != SearchMode.Reference)
+            {
+                try { _noteResults = await NoteSvc.SearchAsync(query, 10); }
+                catch { /* Ollama needed for note search; scripture results still shown. */ }
+            }
+
             switch (_mode)
             {
                 case SearchMode.Reference:
@@ -159,5 +198,18 @@
         var parts = osisId.Split('.');
         if (parts.Length >= 2) return $"/browse/{parts[0]}/{parts[1]}";
         return "/search?q=" + Uri.EscapeDataString(osisId);
+    }
+
+    private static string NoteRefLink(NoteSearchResult n)
+    {
+        var reference = n.Reference ?? "";
+        // "Book chapter[:verse]" (handles a leading ordinal like "1 John 4:8").
+        var m = System.Text.RegularExpressions.Regex.Match(
+            reference, @"^(?<book>.+?)\s+(?<chapter>\d+)(?::\d+)?$");
+        if (m.Success)
+            return $"/browse/{Uri.EscapeDataString(m.Groups["book"].Value.Trim())}/{m.Groups["chapter"].Value}";
+        if (n.Type == NoteType.Book && !string.IsNullOrWhiteSpace(reference))
+            return $"/browse/{Uri.EscapeDataString(reference.Trim())}/1";
+        return "/search?q=" + Uri.EscapeDataString(reference);
     }
 }

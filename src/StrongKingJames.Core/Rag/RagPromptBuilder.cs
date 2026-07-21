@@ -18,7 +18,8 @@ public static class RagPromptBuilder
     public static IReadOnlyList<ChatMessage> Build(
         string question,
         IReadOnlyList<RetrievedPassage> passages,
-        IReadOnlyList<ChatMessage>? history = null)
+        IReadOnlyList<ChatMessage>? history = null,
+        IReadOnlyList<NoteSearchResult>? notes = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Passages:");
@@ -26,6 +27,18 @@ public static class RagPromptBuilder
         {
             sb.AppendLine($"[{p.Reference}] {p.Text}");
         }
+
+        if (notes is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("The user's personal study notes (use them if relevant, and refer to them as \"your note\"):");
+            foreach (var n in notes)
+            {
+                var target = string.IsNullOrWhiteSpace(n.Reference) ? n.Type.ToString() : $"{n.Type} {n.Reference}";
+                sb.AppendLine($"[Note on {target}] {n.Title}: {n.Body}");
+            }
+        }
+
         sb.AppendLine();
         sb.AppendLine($"Question: {question}");
 

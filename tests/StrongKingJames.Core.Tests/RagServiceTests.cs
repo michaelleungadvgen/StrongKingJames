@@ -27,6 +27,17 @@ public class RagServiceTests
         public Task<IReadOnlyList<Verse>> GetNeighborsAsync(int id, int r, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Verse>>(new[] { new Verse { Id = 1, Chapter = 3, VerseNumber = 16, Text = "For God so loved the world" } });
     }
+    private sealed class FakeNotes : INoteRepository
+    {
+        public Task<IReadOnlyList<Note>> GetAllAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Note>>([]);
+        public Task<Note?> GetAsync(int id, CancellationToken ct = default) => Task.FromResult<Note?>(null);
+        public Task<Note> AddAsync(Note note, CancellationToken ct = default) => Task.FromResult(note);
+        public Task UpdateAsync(Note note, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(int id, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetEmbeddingAsync(int noteId, float[] embedding, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<NoteSearchResult>> SemanticSearchNotesAsync(float[] e, int k, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<NoteSearchResult>>([]);
+    }
     private sealed class FakeChat : IChatService
     {
         public async IAsyncEnumerable<string> StreamAsync(IReadOnlyList<ChatMessage> m,
@@ -42,7 +53,7 @@ public class RagServiceTests
     [Fact]
     public async Task AnswerAsync_streams_answer_from_retrieved_passages()
     {
-        var svc = new RagService(new FakeEmbedder(), new FakeSearch(), new FakeRepo(), new FakeChat());
+        var svc = new RagService(new FakeEmbedder(), new FakeSearch(), new FakeRepo(), new FakeChat(), new FakeNotes());
         var chunks = new List<string>();
         await foreach (var c in svc.AnswerAsync("What is love?"))
             chunks.Add(c);

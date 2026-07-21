@@ -11,6 +11,8 @@ public class BibleDbContext(DbContextOptions<BibleDbContext> options) : DbContex
     public DbSet<VerseWord> VerseWords => Set<VerseWord>();
     public DbSet<StrongsEntry> StrongsEntries => Set<StrongsEntry>();
     public DbSet<VerseEmbedding> VerseEmbeddings => Set<VerseEmbedding>();
+    public DbSet<Note> Notes => Set<Note>();
+    public DbSet<NoteEmbedding> NoteEmbeddings => Set<NoteEmbedding>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

@@ -23,6 +23,9 @@
             <option value="@m">@m</option>
         }
     </select>
+    <label class="toolbar-check" title="Include your personal notes as context">
+        <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Use my notes
+    </label>
     <button type="button" class="chat-clear" @onclick="ClearChat" disabled="@(_busy || _messages.Count == 0)">New chat</button>
 </div>
 
@@ -115,6 +118,7 @@
     private List<ChatMessage> _messages = [];
     private List<string> _models = [];
     private string _selectedModel = "";
+    private bool _includeNotes;
 
     private readonly string[] _suggestions =
     [
@@ -161,7 +165,7 @@
         var model = string.IsNullOrWhiteSpace(_selectedModel) ? null : _selectedModel;
         try
         {
-            await foreach (var chunk in Rag.AnswerAsync(question, model, priorContext))
+            await foreach (var chunk in Rag.AnswerAsync(question, model, priorContext, _includeNotes))
             {
                 answer.Text += chunk;
                 await InvokeAsync(StateHasChanged);

@@ -12,5 +12,6 @@ public interface IRagService
         string question,
         string? model = null,
         IReadOnlyList<ChatMessage>? history = null,
+        bool includeNotes = false,
         CancellationToken ct = default);
 }

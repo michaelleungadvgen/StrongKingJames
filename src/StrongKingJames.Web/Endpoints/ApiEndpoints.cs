@@ -1,4 +1,5 @@
 using StrongKingJames.Core.Models;
+using StrongKingJames.Core.Notes;
 using StrongKingJames.Core.Search;
 using StrongKingJames.Core.Services;
 
@@ -35,6 +36,23 @@ public static class ApiEndpoints
             };
         });
 
+        // Notes CRUD (used by the UI's NoteService directly, and exposed for future clients).
+        api.MapGet("/notes", (NoteService notes, CancellationToken ct) => notes.GetAllAsync(ct));
+
+        api.MapPost("/notes", async (Note note, NoteService notes, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(note.Title))
+                return Results.BadRequest("Title is required.");
+            var saved = await notes.SaveAsync(note, ct);
+            return Results.Ok(saved);
+        });
+
+        api.MapDelete("/notes/{id:int}", async (int id, NoteService notes, CancellationToken ct) =>
+        {
+            await notes.DeleteAsync(id, ct);
+            return Results.NoContent();
+        });
+
         // Single streaming chat endpoint (Server-Sent Events).
         api.MapPost("/chat", async (ChatRequest body, IRagService rag, HttpContext ctx) =>
         {
@@ -42,7 +60,8 @@ public static class ApiEndpoints
                 return Results.BadRequest("Question is required.");
             ctx.Response.Headers.ContentType = "text/event-stream";
             ctx.Response.Headers.CacheControl = "no-cache";
-            await foreach (var chunk in rag.AnswerAsync(body.Question, body.Model, ct: ctx.RequestAborted))
+            await foreach (var chunk in rag.AnswerAsync(
+                body.Question, body.Model, includeNotes: body.IncludeNotes, ct: ctx.RequestAborted))
             {
                 // Keep multi-line content valid: a newline in a chunk starts a new SSE data line within the same event.
                 await ctx.Response.WriteAsync($"data: {chunk.Replace("\n", "\ndata: ")}\n\n", ctx.RequestAborted);
@@ -52,5 +71,5 @@ public static class ApiEndpoints
         });
     }
 
-    public record ChatRequest(string Question, string? Model = null);
+    public record ChatRequest(string Question, string? Model = null, bool IncludeNotes = false);
 }

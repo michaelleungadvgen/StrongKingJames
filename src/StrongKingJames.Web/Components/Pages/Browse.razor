@@ -2,6 +2,7 @@
 @page "/browse/{Book}/{Chapter:int}"
 @rendermode InteractiveServer
 @inject IBibleRepository Repo
+@inject NoteService NoteSvc
 @inject NavigationManager Nav
 
 <PageTitle>Browse - StrongKingJames</PageTitle>
@@ -47,7 +48,48 @@ else
     <article class="chapter-card">
         <header class="chapter-header">
             <h2>@_selectedName @_chapter</h2>
+            <button type="button" class="note-btn" @onclick="ToggleAddNote">
+                @(_addingNote ? "Cancel note" : "＋ Add note")
+            </button>
         </header>
+
+        @if (_addingNote)
+        {
+            <div class="inline-note-form">
+                <div class="note-form-row">
+                    <label>
+                        Type
+                        <select @bind="_newNote.Type">
+                            @foreach (var t in Enum.GetValues<NoteType>())
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </label>
+                    @if (_newNote.Type != NoteType.General)
+                    {
+                        <label class="note-ref">
+                            Reference
+                            <input @bind="_newNote.Reference" placeholder="e.g. @_selectedName @_chapter:1" />
+                        </label>
+                    }
+                </div>
+                <input class="note-title-input" @bind="_newNote.Title" placeholder="Note title" />
+                <textarea @bind="_newNote.Body" rows="3" placeholder="Write your note about @_selectedName @_chapter..."></textarea>
+                <div class="note-form-actions">
+                    <button type="button" class="btn-primary" @onclick="SaveNoteAsync"
+                            disabled="@(_savingNote || string.IsNullOrWhiteSpace(_newNote.Title))">
+                        @(_savingNote ? "Saving…" : "Save note")
+                    </button>
+                    @if (_noteSaved)
+                    {
+                        <span class="note-saved">✓ Saved</span>
+                    }
+                    <a class="note-link" href="/notes">View all notes</a>
+                </div>
+            </div>
+        }
+
         <div class="chapter-text">
             @foreach (var v in _verses)
             {
@@ -75,6 +117,11 @@ else
     private IReadOnlyList<string>? _selectedStrongs;
     private string? _appliedRouteKey;
     private string? _bookError;
+
+    private bool _addingNote;
+    private bool _savingNote;
+    private bool _noteSaved;
+    private Note _newNote = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,4 +206,41 @@ else
     }
 
     private void ShowStrongs(List<string> numbers) => _selectedStrongs = numbers;
+
+    private void ToggleAddNote()
+    {
+        _addingNote = !_addingNote;
+        _noteSaved = false;
+        if (_addingNote)
+        {
+            // Pre-fill a verse note pointing at the current chapter.
+            _newNote = new Note
+            {
+                Type = NoteType.Verse,
+                Reference = $"{_selectedName} {_chapter}:1"
+            };
+        }
+    }
+
+    private async Task SaveNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newNote.Title)) return;
+        _savingNote = true;
+        try
+        {
+            if (_newNote.Type == NoteType.General)
+                _newNote.Reference = null;
+            await NoteSvc.SaveAsync(_newNote);
+            _noteSaved = true;
+            _newNote = new Note
+            {
+                Type = NoteType.Verse,
+                Reference = $"{_selectedName} {_chapter}:1"
+            };
+        }
+        finally
+        {
+            _savingNote = false;
+        }
+    }
 }

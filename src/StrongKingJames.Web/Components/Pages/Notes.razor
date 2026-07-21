@@ -1,0 +1,147 @@
+@page "/notes"
+@rendermode InteractiveServer
+@inject NoteService NoteSvc
+
+<PageTitle>Notes - StrongKingJames</PageTitle>
+
+<h1>My Notes</h1>
+<p class="muted">Notes are embedded and can be pulled into Chat and Search as personal context.</p>
+
+<OllamaStatusBanner />
+
+<div class="note-form chat-card">
+    <h2>@(_editing.Id == 0 ? "Add a note" : "Edit note")</h2>
+    <div class="note-form-row">
+        <label>
+            Type
+            <select @bind="_editing.Type">
+                @foreach (var t in Enum.GetValues<NoteType>())
+                {
+                    <option value="@t">@t</option>
+                }
+            </select>
+        </label>
+        @if (_editing.Type != NoteType.General)
+        {
+            <label class="note-ref">
+                @ReferenceLabel(_editing.Type)
+                <input @bind="_editing.Reference" placeholder="@ReferencePlaceholder(_editing.Type)" />
+            </label>
+        }
+    </div>
+    <label>
+        Title
+        <input @bind="_editing.Title" placeholder="A short title" />
+    </label>
+    <label>
+        Note
+        <textarea @bind="_editing.Body" rows="4" placeholder="Write your note..."></textarea>
+    </label>
+    <div class="note-form-actions">
+        <button type="button" class="btn-primary" @onclick="SaveAsync"
+                disabled="@(_saving || string.IsNullOrWhiteSpace(_editing.Title))">
+            @(_saving ? "Saving…" : (_editing.Id == 0 ? "Add note" : "Save changes"))
+        </button>
+        @if (_editing.Id != 0)
+        {
+            <button type="button" class="btn-secondary" @onclick="ResetForm">Cancel</button>
+        }
+    </div>
+</div>
+
+@if (_notes.Count == 0)
+{
+    <p class="muted">No notes yet. Add one above.</p>
+}
+else
+{
+    <div class="note-list">
+        @foreach (var note in _notes)
+        {
+            <div class="note-card">
+                <div class="note-head">
+                    <span class="note-badge note-badge-@note.Type.ToString().ToLowerInvariant()">@note.Type</span>
+                    @if (!string.IsNullOrWhiteSpace(note.Reference))
+                    {
+                        <span class="note-ref-tag">@note.Reference</span>
+                    }
+                    <span class="note-title">@note.Title</span>
+                    <span class="note-actions">
+                        <button type="button" class="note-btn" @onclick="() => EditNote(note)">Edit</button>
+                        <button type="button" class="note-btn note-btn-danger" @onclick="() => DeleteAsync(note.Id)">Delete</button>
+                    </span>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(note.Body))
+                {
+                    <div class="note-body">@note.Body</div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Note> _notes = [];
+    private Note _editing = new();
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _notes = (await NoteSvc.GetAllAsync()).ToList();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editing.Title)) return;
+        _saving = true;
+        try
+        {
+            if (_editing.Type == NoteType.General)
+                _editing.Reference = null;
+            await NoteSvc.SaveAsync(_editing);
+            ResetForm();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void EditNote(Note note)
+    {
+        // Edit a copy so cancelling doesn't mutate the list item.
+        _editing = new Note
+        {
+            Id = note.Id,
+            Type = note.Type,
+            Reference = note.Reference,
+            Title = note.Title,
+            Body = note.Body
+        };
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await NoteSvc.DeleteAsync(id);
+        if (_editing.Id == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm() => _editing = new Note();
+
+    private static string ReferenceLabel(NoteType type) => type switch
+    {
+        NoteType.Book => "Book",
+        NoteType.Character => "Character",
+        NoteType.Verse => "Verse",
+        _ => "Reference"
+    };
+
+    private static string ReferencePlaceholder(NoteType type) => type switch
+    {
+        NoteType.Book => "e.g. John",
+        NoteType.Character => "e.g. Moses",
+        NoteType.Verse => "e.g. John 3:16",
+        _ => ""
+    };
+}

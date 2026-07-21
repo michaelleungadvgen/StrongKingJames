@@ -39,6 +39,11 @@ builder.Services.AddHttpClient<IChatService, OllamaChatService>()
 builder.Services.AddHttpClient<OllamaHealth>()
     .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<IRagService, RagService>();
+builder.Services.AddScoped<StrongKingJames.Core.Notes.NoteService>();
+
+// Serialize/accept enums (e.g. NoteType) as strings in the minimal-API JSON.
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 var app = builder.Build();
 

@@ -14,6 +14,7 @@ public static class DependencyInjection
             opt.UseNpgsql(connectionString, o => o.UseVector()));
         services.AddScoped<IBibleRepository, BibleRepository>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<INoteRepository, NoteRepository>();
         return services;
     }
 }

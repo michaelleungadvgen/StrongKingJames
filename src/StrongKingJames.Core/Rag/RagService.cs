@@ -8,15 +8,18 @@ public class RagService(
     IEmbeddingService embedder,
     ISearchService search,
     IBibleRepository repo,
-    IChatService chat) : IRagService
+    IChatService chat,
+    INoteRepository notes) : IRagService
 {
     private const int TopK = 8;
+    private const int NoteTopK = 4;
     private const int NeighborRadius = 2;
 
     public async IAsyncEnumerable<string> AnswerAsync(
         string question,
         string? model = null,
         IReadOnlyList<ChatMessage>? history = null,
+        bool includeNotes = false,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var qvec = await embedder.EmbedAsync(question, ct);
@@ -32,7 +35,11 @@ public class RagService(
             passages.Add(new RetrievedPassage(hit.Reference, text, hit.Score ?? 0));
         }
 
-        var messages = RagPromptBuilder.Build(question, passages, history);
+        IReadOnlyList<NoteSearchResult>? noteHits = null;
+        if (includeNotes)
+            noteHits = await notes.SemanticSearchNotesAsync(qvec, NoteTopK, ct);
+
+        var messages = RagPromptBuilder.Build(question, passages, history, noteHits);
         await foreach (var chunk in chat.StreamAsync(messages, model, ct))
             yield return chunk;
     }
