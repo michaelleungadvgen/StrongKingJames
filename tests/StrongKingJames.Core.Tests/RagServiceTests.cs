@@ -13,7 +13,8 @@ public class RagServiceTests
     }
     private sealed class FakeSearch : ISearchService
     {
-        public Task<IReadOnlyList<SearchResult>> SemanticSearchAsync(float[] e, int k, CancellationToken ct = default)
+        public Task<IReadOnlyList<SearchResult>> SemanticSearchAsync(
+            float[] e, int k, int? bookId = null, string? testament = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<SearchResult>>(new[]
             { new SearchResult(1, "John.3.16", "John 3:16", "For God so loved the world", 0.9) });
     }
@@ -26,6 +27,8 @@ public class RagServiceTests
         public Task<Verse?> GetVerseByReferenceAsync(string b, int c, int v, CancellationToken ct = default) => Task.FromResult<Verse?>(null);
         public Task<IReadOnlyList<Verse>> GetNeighborsAsync(int id, int r, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Verse>>(new[] { new Verse { Id = 1, Chapter = 3, VerseNumber = 16, Text = "For God so loved the world" } });
+        public Task<IReadOnlyList<SearchResult>> KeywordSearchAsync(string q, int limit, int? bookId = null, string? testament = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SearchResult>>([]);
     }
     private sealed class FakeNotes : INoteRepository
     {

@@ -22,11 +22,49 @@
     <button type="button" class="btn-primary" @onclick="DoSearchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_query))">Search</button>
 </div>
 
-@if (Features.NotesEnabled)
-{
-    <label class="toolbar-check search-notes-check" title="Also search your personal notes">
-        <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Search my notes too
+<div class="search-options">
+    <label class="search-type">
+        Search
+        <select @bind="_searchType" disabled="@_busy">
+            <option value="@SearchMode.Auto">Auto-detect</option>
+            <option value="@SearchMode.Keyword">Keyword (exact text)</option>
+            <option value="@SearchMode.Semantic">Semantic (meaning)</option>
+        </select>
     </label>
+    <button type="button" class="link-btn" @onclick="() => _showAdvanced = !_showAdvanced">
+        @(_showAdvanced ? "Hide filters ▲" : "Advanced filters ▼")
+    </button>
+    @if (Features.NotesEnabled)
+    {
+        <label class="toolbar-check" title="Also search your personal notes">
+            <input type="checkbox" @bind="_includeNotes" disabled="@_busy" /> Search my notes too
+        </label>
+    }
+</div>
+
+@if (_showAdvanced)
+{
+    <div class="search-filters">
+        <label>
+            Testament
+            <select @bind="_filterTestament" disabled="@_busy">
+                <option value="">All</option>
+                <option value="OT">Old Testament</option>
+                <option value="NT">New Testament</option>
+            </select>
+        </label>
+        <label>
+            Book
+            <select @bind="_filterBookId" disabled="@_busy">
+                <option value="">All books</option>
+                @foreach (var b in FilteredBooks)
+                {
+                    <option value="@b.Id">@b.Name</option>
+                }
+            </select>
+        </label>
+        <span class="filter-note">Filters apply to keyword and semantic search.</span>
+    </div>
 }
 
 @if (_mode is not null)
@@ -97,6 +135,21 @@
     private bool _showOllamaBanner;
     private bool _autoRan;
 
+    // Explicit search type + advanced filters.
+    private SearchMode _searchType = SearchMode.Auto;
+    private bool _showAdvanced;
+    private string? _filterTestament;
+    private int? _filterBookId;
+    private IReadOnlyList<Book> _books = [];
+
+    private IEnumerable<Book> FilteredBooks =>
+        string.IsNullOrEmpty(_filterTestament) ? _books : _books.Where(b => b.Testament == _filterTestament);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _books = await Repo.GetBooksAsync();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (!_autoRan && !string.IsNullOrWhiteSpace(Q))
@@ -125,7 +178,12 @@
         _results = [];
         _noteResults = [];
         _showOllamaBanner = false;
-        _mode = SearchModeDetector.Detect(query);
+
+        // Explicit type wins; Auto falls back to detection (reference / Strong's / semantic).
+        _mode = _searchType == SearchMode.Auto ? SearchModeDetector.Detect(query) : _searchType;
+
+        var bookId = _filterBookId;
+        var testament = string.IsNullOrEmpty(_filterTestament) ? null : _filterTestament;
 
         try
         {
@@ -148,11 +206,16 @@
                     if (_results.Count == 0) _message = "No verses found for that Strong's number.";
                     break;
 
+                case SearchMode.Keyword:
+                    _results = await Repo.KeywordSearchAsync(query, 100, bookId, testament);
+                    if (_results.Count == 0) _message = "No verses contain that text (with the current filters).";
+                    break;
+
                 default: // Semantic (and Auto fallthrough)
                     try
                     {
                         var embedding = await Embedder.EmbedAsync(query);
-                        _results = await SearchService.SemanticSearchAsync(embedding, 20);
+                        _results = await SearchService.SemanticSearchAsync(embedding, 20, bookId, testament);
                         if (_results.Count == 0) _message = "No matching verses (are embeddings imported?).";
                     }
                     catch (Exception ex)

@@ -1,3 +1,3 @@
 namespace StrongKingJames.Core.Models;
 
-public enum SearchMode { Auto, Reference, Strongs, Semantic }
+public enum SearchMode { Auto, Reference, Strongs, Semantic, Keyword }

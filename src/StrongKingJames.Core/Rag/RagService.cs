@@ -23,7 +23,7 @@ public class RagService(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var qvec = await embedder.EmbedAsync(question, ct);
-        var hits = await search.SemanticSearchAsync(qvec, TopK, ct);
+        var hits = await search.SemanticSearchAsync(qvec, TopK, ct: ct);
 
         var passages = new List<RetrievedPassage>();
         foreach (var hit in hits)

@@ -43,4 +43,25 @@ public class BibleRepository(BibleDbContext db) : IBibleRepository
             .OrderBy(x => x.VerseNumber)
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<SearchResult>> KeywordSearchAsync(
+        string query, int limit, int? bookId = null, string? testament = null,
+        CancellationToken ct = default)
+    {
+        // Escape LIKE wildcards in the user's text, then match case-insensitively anywhere in the verse.
+        var escaped = query.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var pattern = $"%{escaped}%";
+        return await db.Verses
+            .Where(v => EF.Functions.ILike(v.Text, pattern, "\\"))
+            .Where(v => bookId == null || v.BookId == bookId)
+            .Where(v => testament == null || v.Book!.Testament == testament)
+            .OrderBy(v => v.Book!.SortOrder).ThenBy(v => v.Chapter).ThenBy(v => v.VerseNumber)
+            .Take(limit)
+            .Select(v => new SearchResult(
+                v.Id, v.OsisId,
+                v.Book!.Name + " " + v.Chapter + ":" + v.VerseNumber,
+                v.Text,
+                null))
+            .ToListAsync(ct);
+    }
 }

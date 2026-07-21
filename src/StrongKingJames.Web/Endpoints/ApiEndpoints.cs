@@ -22,7 +22,7 @@ public static class ApiEndpoints
         api.MapGet("/strongs/{number}/verses",
             (string number, IBibleRepository repo, CancellationToken ct) => repo.GetVersesByStrongsAsync(number, ct));
 
-        api.MapGet("/search", async (string q, string? mode,
+        api.MapGet("/search", async (string q, string? mode, int? bookId, string? testament,
             IBibleRepository repo, ISearchService search, IEmbeddingService embed, CancellationToken ct) =>
         {
             var m = Enum.TryParse<SearchMode>(mode, true, out var parsed) ? parsed : SearchMode.Auto;
@@ -30,7 +30,8 @@ public static class ApiEndpoints
             return m switch
             {
                 SearchMode.Strongs => Results.Ok(await repo.GetVersesByStrongsAsync(q.Trim(), ct)),
-                SearchMode.Semantic => Results.Ok(await search.SemanticSearchAsync(await embed.EmbedAsync(q, ct), 20, ct)),
+                SearchMode.Keyword => Results.Ok(await repo.KeywordSearchAsync(q, 100, bookId, testament, ct)),
+                SearchMode.Semantic => Results.Ok(await search.SemanticSearchAsync(await embed.EmbedAsync(q, ct), 20, bookId, testament, ct)),
                 // Reference navigation is a UI concern; the API returns an empty list for reference-mode queries.
                 _ => Results.Ok(Array.Empty<SearchResult>())
             };
